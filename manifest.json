@@ -1,22 +1,22 @@
 {
-  "name": "Lyffin Listing Tool",
-  "short_name": "Lyffin Listing",
-  "description": "Lyffin Factory Listing Tool",
-  "start_url": "/lyffin-listing/index.html",
-  "scope": "/lyffin-listing/",
+  "name": "Lyffin Ops",
+  "short_name": "Lyffin Ops",
+  "description": "Lyffin Operations Platform",
+  "start_url": "/lyffin-ops/login.html",
+  "scope": "/lyffin-ops/",
   "display": "standalone",
-  "background_color": "#1a1a18",
-  "theme_color": "#b89a6a",
+  "background_color": "#f7f6f2",
+  "theme_color": "#1a1a18",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/lyffin-listing/icon-192.png",
+      "src": "/lyffin-ops/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/lyffin-listing/icon-512.png",
+      "src": "/lyffin-ops/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

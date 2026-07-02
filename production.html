@@ -265,6 +265,7 @@ const STAGES = ['carpentry','polish','upholstery','packing','ready'];
 const LABELS = {carpentry:'Structure',polish:'Polish',upholstery:'Upholstery',packing:'Packing',ready:'Ready'};
 let allData = [];
 const itemsCache = {};
+const openProjects = new Set(); // tracks which project pids are expanded
 let currentRole = 'floor';
 let currentUserName = '';
 let currentUserUID = '';
@@ -359,6 +360,13 @@ function render() {
     return;
   }
   grid.innerHTML = data.map(function(d) { return renderCard(d); }).join('');
+  // Restore previously open projects
+  openProjects.forEach(function(pid) {
+    const wrap = document.getElementById('pw-' + pid);
+    const chv = document.getElementById('chv-' + pid);
+    if (wrap) wrap.classList.add('open');
+    if (chv) chv.classList.add('open');
+  });
 }
 
 function renderCard(d) {
@@ -735,6 +743,7 @@ window.toggleProject = function(pid) {
   const isOpen = wrap.classList.contains('open');
   wrap.classList.toggle('open', !isOpen);
   if (chv) chv.classList.toggle('open', !isOpen);
+  if (!isOpen) { openProjects.add(pid); } else { openProjects.delete(pid); }
 };
 
 window.filterProjects = function() { render(); };
