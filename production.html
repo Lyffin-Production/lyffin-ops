@@ -370,7 +370,7 @@ function renderCard(d) {
   const badgeCls = 'badge-' + (project.status || 'structure').toLowerCase().replace(/\s/g,'');
   const rows = items.map(function(item) { return renderRow(project.id, item); }).join('');
   const pid = project.id.replace(/[^a-z0-9]/gi,'_');
-  const isOpen = ready < total;
+  const isOpen = false; // always start collapsed, user taps to expand
   return '<div class="project-card">' +
     '<div class="project-header" onclick="toggleProject(\'' + pid + '\')" id="ph-' + pid + '">' +
       '<div style="display:flex;align-items:center;gap:10px">' +
