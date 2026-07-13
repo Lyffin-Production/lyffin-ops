@@ -512,6 +512,8 @@
         </div>
         <div class="project-meta-grid">
           <div class="meta-item"><label>Location</label><span>${esc(project.location || '—')}</span></div>
+        ${project.address ? `<div class="meta-item" style="grid-column:1/-1"><label>Address</label><span style="white-space:pre-line">${esc(project.address)}</span></div>` : ''}
+        ${project.coordinates ? `<div class="meta-item"><label>Coordinates</label><span>${project.coordinates.startsWith('http') ? `<a href="${esc(project.coordinates)}" target="_blank" style="color:var(--gold);text-decoration:none">Open in Maps ↗</a>` : esc(project.coordinates)}</span></div>` : ''}
           <div class="meta-item"><label>Assignee</label><span>${esc(project.assignee || '—')}</span></div>
           <div class="meta-item"><label>Handover</label><span>${formatDate(project.handoverDate)}</span></div>
           <div class="meta-item"><label>Contact</label><span>${esc(project.contactNo || '—')}</span></div>
@@ -687,7 +689,15 @@ ${(function(){
           </div>
           <div class="form-field">
             <label>Location</label>
-            <input type="text" id="e-location" value="${esc(project.location||'')}">
+            <input type="text" id="e-location" value="${esc(project.location||'')}" placeholder="e.g. Kozhikode">
+          </div>
+          <div class="form-field">
+            <label>Address</label>
+            <textarea id="e-address" rows="2" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:13.5px;font-family:var(--font-sans);outline:none;resize:vertical" placeholder="Full delivery address">${esc(project.address||'')}</textarea>
+          </div>
+          <div class="form-field">
+            <label>Location coordinates <span style="font-size:11px;font-weight:400;color:var(--ink-3)">(Google Maps link or lat,lng)</span></label>
+            <input type="text" id="e-coords" value="${esc(project.coordinates||'')}" placeholder="e.g. 11.2588,75.7804 or paste Maps link">
           </div>
           <div class="form-field">
             <label>Handover date</label>
@@ -744,6 +754,8 @@ ${(function(){
         projectName:    document.getElementById('e-name').value.trim(),
         orderNo:        document.getElementById('e-order').value.trim(),
         location:       document.getElementById('e-location').value.trim(),
+        address:        document.getElementById('e-address').value.trim(),
+        coordinates:    document.getElementById('e-coords').value.trim(),
         handoverDate:   document.getElementById('e-handover').value,
         assignee:       document.getElementById('e-assignee').value,
         status:         document.getElementById('e-status').value,
