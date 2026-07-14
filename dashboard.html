@@ -815,7 +815,7 @@
         <div class="stat-value" id="stat-complaints">—</div>
         <div class="stat-sub">open issues</div>
       </div>
-      <div class="stat-card" onclick="showCompleted()" style="cursor:pointer" title="Click to view completed projects">
+      <div class="stat-card" id="card-completed" style="cursor:pointer" title="Click to view completed projects">
         <div class="stat-label">Completed</div>
         <div class="stat-value" id="stat-completed">—</div>
         <div class="stat-sub" style="display:flex;align-items:center;justify-content:space-between">
@@ -823,7 +823,7 @@
           <span style="font-size:10px;color:var(--gold)">View all →</span>
         </div>
       </div>
-      <div class="stat-card" onclick="showOverdue()" style="cursor:pointer;border-color:#f5c6c6" title="Click to view overdue projects">
+      <div class="stat-card" id="card-overdue" style="cursor:pointer;border-color:#f5c6c6" title="Click to view overdue projects">
         <div class="stat-label" style="color:#c0392b">Overdue</div>
         <div class="stat-value" id="stat-overdue" style="color:#c0392b">—</div>
         <div class="stat-sub" style="display:flex;align-items:center;justify-content:space-between">
@@ -1143,20 +1143,27 @@
     filterProjects();
   };
 
+  // Wire stat card clicks inside module scope
+  document.getElementById('card-completed').addEventListener('click', function() { showCompleted(); });
+  document.getElementById('card-overdue').addEventListener('click', function() { showOverdue(); });
+
   window.showCompleted = function() {
+    currentProjTab = 'all';
     document.getElementById('filter-status').value = 'Completed';
     filterProjects();
-    document.querySelector('.table-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(function() {
+      const tw = document.querySelector('.table-wrap');
+      if (tw) tw.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
 
   window.showOverdue = function() {
+    currentProjTab = 'all';
     document.getElementById('filter-status').value = '';
     filterProjects();
-    // Highlight overdue rows by scrolling to first overdue
     setTimeout(function() {
-      const overdue = document.querySelector('.overdue-row');
-      if (overdue) overdue.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      document.querySelector('.table-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const tw = document.querySelector('.table-wrap');
+      if (tw) tw.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
   };
 
