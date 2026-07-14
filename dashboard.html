@@ -1050,9 +1050,9 @@
     function updateComplaintsCount() {
       let docs = allComplaintDocs;
       if (currentRole === 'sales') {
-        const myProjectIds = allProjects.filter(function(p) {
-          return p.assigneeUid === currentUserUID || p.assignee === currentUserName;
-        }).map(function(p) { return p.id; });
+        // Use all projects (unfiltered) to check UID match for safety
+        const myProjectIds = allProjects.map(function(p) { return p.id; });
+        if (!myProjectIds.length) return; // wait for projects to load
         docs = docs.filter(function(d) { return myProjectIds.includes(d.projectId); });
       }
       const open = docs.filter(function(d) { return d.status !== 'Resolved'; }).length;
