@@ -203,13 +203,16 @@ body{font-family:var(--font-sans);background:var(--surface);color:var(--ink);min
       </div>
       <input type="text" id="prod-search" class="filter-select" placeholder="Search project…" oninput="filterProjects()" style="width:160px">
       <select class="filter-select" id="filter-status" onchange="filterProjects()">
-        <option value="">All active projects</option>
+        <option value="active">Active only</option>
+        <option value="">All projects</option>
         <option value="Structure">Structure</option>
         <option value="Polish">Polish</option>
         <option value="Upholstery">Upholstery</option>
         <option value="Packing">Packing</option>
         <option value="Ready">Ready</option>
         <option value="On Hold">On Hold</option>
+        <option value="Delivered">Delivered</option>
+        <option value="Completed">Completed</option>
       </select>
     </div>
   </div>
@@ -349,7 +352,14 @@ function render() {
   const filter = document.getElementById('filter-status').value;
   const searchEl = document.getElementById('prod-search');
   const search = searchEl ? searchEl.value.toLowerCase() : '';
-  let data = filter ? allData.filter(function(d) { return d.project.status === filter; }) : allData;
+  let data;
+  if (filter === 'active') {
+    data = allData.filter(function(d) { return !['Delivered','Completed'].includes(d.project.status); });
+  } else if (filter) {
+    data = allData.filter(function(d) { return d.project.status === filter; });
+  } else {
+    data = allData;
+  }
   if (search) data = data.filter(function(d) {
     return (d.project.projectName||'').toLowerCase().includes(search) ||
            (d.project.location||'').toLowerCase().includes(search) ||
