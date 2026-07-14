@@ -1045,10 +1045,22 @@
   }
 
   function loadProjects() {
-    // Real-time complaints count listener
-    onSnapshot(collection(db, 'complaints'), function(snap) {
-      const open = snap.docs.filter(function(d) { return d.data().status !== 'Resolved'; }).length;
+    // Real-time complaints count listener — sales only see their assigned projects
+    let allComplaintDocs = [];
+    function updateComplaintsCount() {
+      let docs = allComplaintDocs;
+      if (currentRole === 'sales') {
+        const myProjectIds = allProjects.filter(function(p) {
+          return p.assigneeUid === currentUserUID || p.assignee === currentUserName;
+        }).map(function(p) { return p.id; });
+        docs = docs.filter(function(d) { return myProjectIds.includes(d.projectId); });
+      }
+      const open = docs.filter(function(d) { return d.status !== 'Resolved'; }).length;
       document.getElementById('stat-complaints').textContent = open;
+    }
+    onSnapshot(collection(db, 'complaints'), function(snap) {
+      allComplaintDocs = snap.docs.map(function(d) { return d.data(); });
+      updateComplaintsCount();
     });
 
     const q = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
@@ -1064,6 +1076,7 @@
       }
       allProjects = projects;
       updateStats();
+      updateComplaintsCount();
       populateAssigneeFilter();
       renderTable(allProjects);
       renderDashboardGantt(allProjects);
