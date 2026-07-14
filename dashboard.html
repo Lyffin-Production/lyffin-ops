@@ -810,10 +810,13 @@
         <div class="stat-value" id="stat-production">—</div>
         <div class="stat-sub">at factory</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" id="card-complaints" style="cursor:pointer" title="Click to view complaints">
         <div class="stat-label">Complaints</div>
         <div class="stat-value" id="stat-complaints">—</div>
-        <div class="stat-sub">open issues</div>
+        <div class="stat-sub" style="display:flex;align-items:center;justify-content:space-between">
+          <span>open issues</span>
+          <span style="font-size:10px;color:var(--gold)">View →</span>
+        </div>
       </div>
       <div class="stat-card" id="card-completed" style="cursor:pointer" title="Click to view completed projects">
         <div class="stat-label">Completed</div>
@@ -1068,8 +1071,13 @@
       allProjects.filter(p => p.deliveryStatus === 'Ongoing').length;
     document.getElementById('stat-production').textContent =
       allProjects.filter(p => productionStatuses.includes(p.status)).length;
-    document.getElementById('stat-complaints').textContent =
-      allProjects.filter(p => p.status === 'Complaints').length;
+    // Load open complaints count from Firestore
+    getDocs(collection(db, 'complaints')).then(function(snap) {
+      const open = snap.docs.filter(function(d) { return d.data().status !== 'Resolved'; }).length;
+      document.getElementById('stat-complaints').textContent = open;
+    }).catch(function() {
+      document.getElementById('stat-complaints').textContent = '—';
+    });
     document.getElementById('stat-completed').textContent =
       allProjects.filter(p => p.status === 'Completed').length;
     const today = new Date(); today.setHours(0,0,0,0);
@@ -1146,6 +1154,7 @@
   // Wire stat card clicks inside module scope
   document.getElementById('card-completed').addEventListener('click', function() { showCompleted(); });
   document.getElementById('card-overdue').addEventListener('click', function() { showOverdue(); });
+  document.getElementById('card-complaints').addEventListener('click', function() { window.location.href = 'qc.html'; });
 
   window.showCompleted = function() {
     currentProjTab = 'all';
