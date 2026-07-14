@@ -1045,6 +1045,12 @@
   }
 
   function loadProjects() {
+    // Real-time complaints count listener
+    onSnapshot(collection(db, 'complaints'), function(snap) {
+      const open = snap.docs.filter(function(d) { return d.data().status !== 'Resolved'; }).length;
+      document.getElementById('stat-complaints').textContent = open;
+    });
+
     const q = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
     onSnapshot(q, (snapshot) => {
       let projects = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -1071,13 +1077,7 @@
       allProjects.filter(p => p.deliveryStatus === 'Ongoing').length;
     document.getElementById('stat-production').textContent =
       allProjects.filter(p => productionStatuses.includes(p.status)).length;
-    // Load open complaints count from Firestore
-    getDocs(collection(db, 'complaints')).then(function(snap) {
-      const open = snap.docs.filter(function(d) { return d.data().status !== 'Resolved'; }).length;
-      document.getElementById('stat-complaints').textContent = open;
-    }).catch(function() {
-      document.getElementById('stat-complaints').textContent = '—';
-    });
+    // complaints count handled by real-time listener in loadProjects
     document.getElementById('stat-completed').textContent =
       allProjects.filter(p => p.status === 'Completed').length;
     const today = new Date(); today.setHours(0,0,0,0);
@@ -1154,7 +1154,7 @@
   // Wire stat card clicks inside module scope
   document.getElementById('card-completed').addEventListener('click', function() { showCompleted(); });
   document.getElementById('card-overdue').addEventListener('click', function() { showOverdue(); });
-  document.getElementById('card-complaints').addEventListener('click', function() { window.location.href = 'qc.html'; });
+  document.getElementById('card-complaints').addEventListener('click', function() { window.location.assign('qc.html'); });
 
   window.showCompleted = function() {
     currentProjTab = 'all';
