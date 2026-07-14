@@ -907,7 +907,31 @@ ${(function(){
 
   // ── NOTES TAB ─────────────────────────────────────────────────────────────
   function renderNotes() {
-    return `
+    const hasDelivery = project.deliveredDate || project.deliveredBy || project.deliveryNotes;
+    const deliveryCard = hasDelivery ? `
+      <div class="section-card" style="margin-bottom:16px">
+        <div class="section-header">
+          <div class="section-title">Delivery record</div>
+          <span class="badge badge-${(project.status||'').toLowerCase().replace(/\s/g,'-')}">${project.status||''}</span>
+        </div>
+        <div style="padding:16px 20px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <div style="font-size:10px;font-weight:500;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Delivery date</div>
+            <div style="font-size:14px;color:var(--ink)">${project.deliveredDate ? formatDate(project.deliveredDate) : '—'}</div>
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:500;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Delivered by</div>
+            <div style="font-size:14px;color:var(--ink)">${esc(project.deliveredBy||'—')}</div>
+          </div>
+          ${project.deliveryNotes ? `
+          <div style="grid-column:1/-1">
+            <div style="font-size:10px;font-weight:500;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Delivery notes</div>
+            <div style="font-size:13.5px;color:var(--ink-2);line-height:1.6;background:var(--surface);padding:10px 12px;border-radius:6px;white-space:pre-line">${esc(project.deliveryNotes)}</div>
+          </div>` : ''}
+        </div>
+      </div>` : '';
+
+    return deliveryCard + `
       <div class="section-card">
         <div class="section-header"><div class="section-title">Project notes</div></div>
         <div class="notes-area">

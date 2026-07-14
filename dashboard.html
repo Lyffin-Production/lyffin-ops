@@ -1157,8 +1157,11 @@
     }, 100);
   };
 
+  let showingOverdue = false;
+
   window.showOverdue = function() {
     currentProjTab = 'all';
+    showingOverdue = true;
     document.getElementById('filter-status').value = '';
     filterProjects();
     setTimeout(function() {
@@ -1171,7 +1174,10 @@
     const search   = document.getElementById('search-input').value.toLowerCase();
     const status   = document.getElementById('filter-status').value;
     const assignee = document.getElementById('filter-assignee').value;
+    // Reset overdue mode if user changes filters manually
+    if (search || status || assignee) showingOverdue = false;
 
+    const today = new Date(); today.setHours(0,0,0,0);
     const ONGOING_STATUSES = ['Not Started','Structure','Carpentry','Polish','Upholstery','Packing','Complaints'];
     const filtered = allProjects.filter(p => {
       const matchSearch = !search ||
@@ -1185,7 +1191,12 @@
         : currentProjTab === 'delivered' ? p.status === 'Delivered'
         : currentProjTab === 'completed' ? p.status === 'Completed'
         : true;
-      return matchSearch && matchStatus && matchAssignee && matchTab;
+      // Overdue filter: active projects past handover date
+      const matchOverdue = !showingOverdue || (
+        !['Delivered','Completed','On Hold'].includes(p.status) &&
+        p.handoverDate && new Date(p.handoverDate) < today
+      );
+      return matchSearch && matchStatus && matchAssignee && matchTab && matchOverdue;
     });
 
     renderTable(filtered);
