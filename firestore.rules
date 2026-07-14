@@ -1,0 +1,40 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function role() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isAuth() {
+      return request.auth != null;
+    }
+    match /users/{userId} {
+      allow read: if isAuth();
+      allow write: if isAuth() && role() == 'admin';
+    }
+    match /projects/{projectId} {
+      allow read, write: if true;
+      match /items/{itemId} {
+        allow read, write: if true;
+      }
+    }
+    match /complaints/{id} {
+      allow read: if isAuth();
+      allow write: if isAuth() && role() in ['admin','sales','qc','supervisor'];
+    }
+    match /qc_reports/{id} {
+      allow read: if isAuth();
+      allow write: if isAuth() && role() in ['admin','qc','supervisor'];
+    }
+
+    // ── Capacity Ledger (admin only) ──────────────────────────────────
+    // Production output + buffer settings.
+    match /config/{docId} {
+      allow read, write: if isAuth() && role() == 'admin';
+    }
+    // Per-project production values (pricing) — kept out of the public
+    // /projects docs so only admins can read or write them.
+    match /projectFinance/{projectId} {
+      allow read, write: if isAuth() && role() == 'admin';
+    }
+  }
+}

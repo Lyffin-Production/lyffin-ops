@@ -166,6 +166,10 @@ body{font-family:var(--font-sans);background:var(--surface);color:var(--ink);min
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1l2 4h4l-3 3 1 4-4-2-4 2 1-4L2 5h4z"/></svg>QC &amp; Complaints
     </a>
     <div class="nav-section" id="nav-admin-section" style="display:none">Admin</div>
+    <a class="nav-item" href="capacity.html" id="nav-capacity" style="display:none">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 14h14"/><rect x="2" y="8" width="3" height="6"/><rect x="6.5" y="4" width="3" height="10"/><rect x="11" y="6" width="3" height="8"/></svg>
+      Capacity
+    </a>
     <a class="nav-item" href="admin.html" id="nav-admin" style="display:none">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1a3 3 0 100 6 3 3 0 000-6z"/><path d="M2 15c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>Admin dashboard
     </a>
@@ -293,6 +297,7 @@ onAuthStateChanged(auth, async function(user) {
   if (currentRole === 'admin') {
     document.getElementById('nav-admin-section').style.display = 'block';
     document.getElementById('nav-admin').style.display = 'flex';
+    var _navCap=document.getElementById('nav-capacity'); if(_navCap) _navCap.style.display='flex';
     const bnA = document.getElementById('bn-admin');
     if (bnA) bnA.style.display = 'flex';
   }
