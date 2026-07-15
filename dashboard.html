@@ -731,6 +731,13 @@
   .content { padding-bottom: 80px !important; }
   .bottom-nav { display: flex; }
 }
+
+  /* 6-item bottom nav fit (Capacity added) */
+  .bn-item { min-width: 0; padding: 0 2px; white-space: nowrap; }
+  @media (max-width: 400px) {
+    .bn-item { font-size: 9px; gap: 2px; }
+    .bn-item svg { width: 18px; height: 18px; }
+  }
 </style>
 </head>
 <body>
@@ -1021,6 +1028,8 @@
       var _navCap=document.getElementById('nav-capacity'); if(_navCap) _navCap.style.display='flex';
       const bnA = document.getElementById('bn-admin');
       if (bnA) bnA.style.display = 'flex';
+      const bnC = document.getElementById('bn-capacity');
+      if (bnC) bnC.style.display = 'flex';
     }
 
     // Hide "New project" button for floor/qc roles
@@ -1424,6 +1433,10 @@ if ('serviceWorker' in navigator) {
     <a class="bn-item" href="qc.html">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1l2 4h4l-3 3 1 4-4-2-4 2 1-4L2 5h4z"/></svg>
       QC
+    </a>
+    <a class="bn-item" href="capacity.html" id="bn-capacity" style="display:none">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 14h14"/><rect x="2" y="8" width="3" height="6"/><rect x="6.5" y="4" width="3" height="10"/><rect x="11" y="6" width="3" height="8"/></svg>
+      Capacity
     </a>
     <a class="bn-item" href="admin.html" id="bn-admin" style="display:none">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="1" width="14" height="10" rx="1"/><path d="M5 15h6M8 11v4"/></svg>
