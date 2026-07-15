@@ -734,45 +734,72 @@
 
   /* ── Capacity Ledger ─────────────────────────────────────────────── */
   .lc-grid{display:grid;grid-template-columns:1fr;gap:16px}
-  @media(min-width:960px){.lc-grid{grid-template-columns:300px 1fr}}
+  @media(min-width:1000px){.lc-grid{grid-template-columns:290px 1fr}}
   .lc-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
   .lc-card h3{font-family:var(--font-sans);font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);margin-bottom:12px;font-weight:600}
   .lc-lab{display:block;font-size:12px;color:var(--ink-2);margin:8px 0 3px}
   .lc-inp{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;font-family:var(--font-sans);background:var(--white);color:var(--ink)}
   .lc-inp:focus{outline:2px solid var(--gold-lt);border-color:var(--gold)}
   .lc-hint{font-size:11px;color:var(--ink-3);margin-top:4px;line-height:1.4}
-  .lc-btn{margin-top:10px;padding:8px 14px;border:1px solid var(--ink);border-radius:var(--radius);background:var(--ink);color:#fff;cursor:pointer;font-size:13px;font-family:var(--font-sans)}
+  .lc-btn{margin-top:12px;padding:8px 14px;border:1px solid var(--ink);border-radius:var(--radius);background:var(--ink);color:#fff;cursor:pointer;font-size:13px;font-family:var(--font-sans)}
   .lc-btn:disabled{opacity:.6;cursor:default}
   .lc-tot{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px dashed var(--border);font-size:12px;color:var(--ink-2)}
   .lc-tot b{display:block;font-size:17px;color:var(--ink);font-family:var(--font-disp);margin-top:2px}
-  .lc-mrow{display:grid;grid-template-columns:78px 1fr 132px;gap:10px;align-items:center;margin-bottom:7px}
-  .lc-ml{font-size:13px;font-weight:500}.lc-ml span{color:var(--ink-3);font-size:11px}
-  .lc-bar{position:relative;height:24px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;overflow:hidden}
-  .lc-buf{position:absolute;right:0;top:0;height:100%;background:repeating-linear-gradient(45deg,#e6e4de,#e6e4de 5px,#dcd9d2 5px,#dcd9d2 10px)}
-  .lc-fill{position:absolute;left:0;top:0;height:100%;background:#5a8f6f}
-  .lc-fill.tight{background:#c9a227}.lc-fill.over{background:#c0392b}
-  .lc-line{position:absolute;top:0;height:100%;width:2px;background:var(--ink);opacity:.4}
-  .lc-mf{font-size:12px;text-align:right;color:var(--ink-2)}
-  .lc-free{color:#4a7a5e;font-weight:500}.lc-free.tight{color:#a8851f}.lc-free.over{color:#c0392b}
-  .lc-red{color:#c0392b}
-  .lc-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap}
+
+  .lc-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:10px;flex-wrap:wrap}
   .lc-head h3{margin:0}
+  .lc-freestat{font-size:11px;color:var(--ink-3);text-align:right;line-height:1.5}
+  .lc-freestat b{font-family:var(--font-disp);font-size:15px;color:#4a7a5e}
+  .lc-freestat span{display:block}
+
+  /* day grid */
+  .lc-mrow{display:grid;grid-template-columns:64px 1fr 78px;gap:10px;align-items:center;margin-bottom:6px}
+  .lc-ml{font-size:12px;font-weight:600;color:var(--ink-2)}
+  .lc-cells{display:grid;grid-template-columns:repeat(31,1fr);gap:2px}
+  .lc-cell{aspect-ratio:1;min-height:15px;border-radius:3px;font-size:8px;display:flex;align-items:center;justify-content:center;color:rgba(0,0,0,.45);cursor:default;border:1px solid transparent}
+  .lc-pad{background:none}
+  .lc-off{background:repeating-linear-gradient(45deg,#eeece7,#eeece7 3px,#e4e1da 3px,#e4e1da 6px);color:rgba(0,0,0,.2)}
+  .lc-c0{background:#eef3ef;border-color:#d9e4dd}
+  .lc-c1{background:#c9e0d1}
+  .lc-c2{background:#8fbea3}
+  .lc-c3{background:#4a7a5e;color:rgba(255,255,255,.85)}
+  .lc-c4{background:#c0392b;color:#fff}
+  .lc-past{opacity:.42}
+  .lc-today{outline:2px solid var(--gold);outline-offset:-2px;font-weight:700}
+  .lc-mf{font-size:11px;text-align:right;color:var(--ink-3);line-height:1.4}
+  .lc-freetxt{color:#4a7a5e;font-weight:600}
+  .lc-freetxt.zero{color:var(--ink-3);font-weight:400}
+  .lc-legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;font-size:11px;color:var(--ink-3);align-items:center}
+  .lc-legend span{display:inline-flex;align-items:center;gap:5px}
+  .lc-sw{width:12px;height:12px;border-radius:3px;display:inline-block;border:1px solid var(--border)}
+  @media(max-width:768px){
+    .lc-mrow{grid-template-columns:44px 1fr;gap:6px}
+    .lc-mf{display:none}
+    .lc-cell{min-height:12px;font-size:0}
+  }
+
+  /* order book */
   .lc-seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
   .lc-segbtn{border:none;padding:6px 11px;font-size:12px;background:var(--white);color:var(--ink-2);cursor:pointer;font-family:var(--font-sans)}
   .lc-segbtn.active{background:var(--ink);color:#fff}
   .lc-segbtn+.lc-segbtn{border-left:1px solid var(--border)}
   .lc-tbl{width:100%;border-collapse:collapse}
-  .lc-tbl th,.lc-tbl td{text-align:left;padding:8px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:top}
+  .lc-tbl th,.lc-tbl td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:top}
   .lc-tbl th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);font-weight:600}
   .lc-tbl .r{text-align:right}
-  .lc-vinput{width:76px;padding:5px 7px;border:1px solid var(--border);border-radius:5px;text-align:right;font-size:13px;font-family:var(--font-sans);background:var(--white);color:var(--ink)}
-  .lc-pn{font-weight:600}.lc-pc{font-size:11px;color:var(--ink-3)}
-  .lc-comp{font-weight:600;color:var(--ink)}
+  .lc-idx{color:var(--ink-3);font-size:12px}
+  .lc-dt{font-size:12px;color:var(--ink-2);white-space:nowrap}
+  .lc-vinput{width:70px;padding:5px 7px;border:1px solid var(--border);border-radius:5px;text-align:right;font-size:13px;font-family:var(--font-sans);background:var(--white);color:var(--ink)}
+  .lc-pn{font-weight:600}
+  .lc-pc{font-size:11px;color:var(--ink-3)}
+  .lc-comp{font-weight:600;color:var(--ink);white-space:nowrap}
+  .lc-runs{font-size:11px;color:var(--ink-3);margin-top:2px}
   .lc-store{font-size:11px;color:#a8851f;margin-top:2px}
-  .lc-pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;margin-top:3px}
+  .lc-pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;margin-top:3px;white-space:nowrap}
   .lc-pill.ok{background:var(--s-packing);color:#14532d}
   .lc-pill.tight{background:var(--s-carpentry);color:#8a6d0f}
   .lc-pill.over{background:var(--s-complaints);color:#991b1b}
+  .lc-red{color:#c0392b}
   .lc-qr{margin-top:10px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;line-height:1.5}
   .lc-qr b{font-family:var(--font-disp)}
   .lc-muted{color:var(--ink-3)}
@@ -806,7 +833,7 @@
 
     <a class="nav-item" href="qc.html" id="nav-qc">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1l2 4h4l-3 3 1 4-4-2-4 2 1-4L2 5h4z"/></svg>
-      QC & Complaints
+      QC &amp; Complaints
     </a>
 
     <div class="nav-section" id="nav-admin-section" style="display:none">Admin</div>
@@ -849,58 +876,84 @@
           <h3>Capacity settings</h3>
           <label class="lc-lab">Monthly production output</label>
           <input id="lc-cap" class="lc-inp" type="number" min="1" value="40">
-          <div class="lc-hint">Your true throughput, in lakhs. 100 over 3 months ≈ 33/mo; 150 over 3 months ≈ 50/mo.</div>
+          <div class="lc-hint">Your true throughput, in lakhs. 100 over 3 months ≈ 33/mo.</div>
+
+          <label class="lc-lab">Working days per month</label>
+          <input id="lc-wd" class="lc-inp" type="number" min="1" max="31" value="26">
+          <div class="lc-hint">Sundays are treated as the weekly off in the calendar.</div>
+
           <label class="lc-lab">Buffer held back (%)</label>
           <input id="lc-buf" class="lc-inp" type="number" min="0" max="60" value="18">
-          <div class="lc-hint">Reserved for leave, rework &amp; complaints, and client slippage. Never sell this.</div>
+          <div class="lc-hint">Reserved for leave, rework &amp; complaints, and client slippage.</div>
+
           <button id="lc-save" class="lc-btn">Save settings</button>
+
           <div class="lc-tot">
-            <div>Sellable / mo<b id="lc-sellable">—</b></div>
-            <div>Buffer / mo<b id="lc-buffer">—</b></div>
+            <div>Raw per day<b id="lc-perday">—</b></div>
+            <div>Sellable per day<b id="lc-daily">—</b></div>
           </div>
         </div>
 
         <div class="lc-card" style="margin-top:16px">
           <h3>Quote a new project</h3>
+          <label class="lc-lab">Order date</label>
+          <input id="lc-quoteOrder" class="lc-inp" type="date">
           <label class="lc-lab">Project value</label>
           <input id="lc-quoteVal" class="lc-inp" type="number" min="1" placeholder="e.g. 22">
-          <label class="lc-lab">Client's requested delivery (optional)</label>
-          <input id="lc-quoteReq" class="lc-inp" type="month">
+          <label class="lc-lab">Client's requested handover (optional)</label>
+          <input id="lc-quoteReq" class="lc-inp" type="date">
           <div id="lc-quoteResult" class="lc-qr lc-muted">Enter a value above.</div>
-          <div class="lc-hint" style="margin-top:8px">This is the date to promise — the queue decides it, not the client.</div>
+          <div class="lc-hint" style="margin-top:8px">Work starts from the order date and fills the first free days in the calendar.</div>
         </div>
       </div>
 
       <div>
         <div class="lc-card">
-          <h3>Forward capacity — committed vs free</h3>
+          <div class="lc-head">
+            <h3>Day-by-day capacity</h3>
+            <div class="lc-freestat">
+              <b id="lc-free60">—</b> free over the next 60 days
+              <span>across <b id="lc-freedays">—</b> days with room</span>
+            </div>
+          </div>
           <div id="lc-months"></div>
+          <div class="lc-legend">
+            <span><i class="lc-sw lc-c0"></i> free</span>
+            <span><i class="lc-sw lc-c1"></i> light</span>
+            <span><i class="lc-sw lc-c2"></i> half</span>
+            <span><i class="lc-sw lc-c3"></i> full</span>
+            <span><i class="lc-sw lc-c4"></i> over</span>
+            <span><i class="lc-sw lc-off"></i> weekly off</span>
+            <span><i class="lc-sw lc-today"></i> today</span>
+          </div>
+          <div class="lc-hint" style="margin-top:8px">Hover any day for what's used and what's still free. Pale days are already past.</div>
         </div>
 
         <div class="lc-card" style="margin-top:16px">
           <div class="lc-head">
             <h3>Order book</h3>
             <div class="lc-seg">
-              <button id="lc-sortEdd" class="lc-segbtn active">By delivery date</button>
-              <button id="lc-sortManual" class="lc-segbtn">By intake</button>
+              <button id="lc-sortEdd" class="lc-segbtn active">By handover date</button>
+              <button id="lc-sortOrder" class="lc-segbtn">By order date</button>
             </div>
           </div>
           <table class="lc-tbl">
             <thead><tr>
-              <th style="width:22px">#</th>
+              <th style="width:20px">#</th>
               <th>Project / location</th>
-              <th class="r" style="width:88px">Value</th>
-              <th style="width:96px">Wanted</th>
-              <th style="width:168px">Completes / status</th>
+              <th style="width:64px">Ordered</th>
+              <th class="r" style="width:80px">Value</th>
+              <th style="width:64px">Wanted</th>
+              <th style="width:180px">Delivery / status</th>
             </tr></thead>
             <tbody id="lc-body"></tbody>
           </table>
-          <div class="lc-hint" style="margin-top:8px">“Wanted” is each project’s handover date. Enter a value to schedule it. Values are saved to an admin-only collection.</div>
+          <div class="lc-hint" style="margin-top:8px">Delivery is computed from the order date forward. Enter a value to schedule a project. Values save to an admin-only collection.</div>
           <div class="lc-tot">
             <div>Projects<b id="lc-count">0</b></div>
             <div>Valued<b id="lc-valued">—</b></div>
             <div>At risk<b id="lc-risk">—</b></div>
-            <div>Clears by<b id="lc-clears">—</b></div>
+            <div>Book clears<b id="lc-clears">—</b></div>
           </div>
         </div>
       </div>
@@ -954,196 +1007,288 @@
   const auth = getAuth(app);
   const db   = getFirestore(app);
 
-  const HORIZON = 30;
-  const DONE = ['Delivered', 'Completed', 'Complaints'];   // not in the production queue
-  let cfg = { capacity: 40, buffer: 18 };
-  let sortMode = 'edd';
-  let projects = [];            // {id,name,client,status,requested,value}
-  let quoteVal = null, quoteReq = null;
-
-  /* ── scheduling engine ─────────────────────────────────────────────── */
+  const DAY_MS  = 86400000;
+  const HORIZON = 730;                  // days modelled
+  const DONE    = ['Delivered','Completed','Complaints'];
   const MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  function monthList(){
-    const now=new Date(), y=now.getFullYear(), m=now.getMonth(), a=[];
-    for(let i=0;i<HORIZON;i++){ const mm=(m+i)%12, yy=y+Math.floor((m+i)/12); a.push({name:MN[mm],year:yy,idx:i}); }
-    return a;
-  }
-  function nowYM(){ const d=new Date(); return {y:d.getFullYear(), m:d.getMonth()}; }
-  function reqIndex(s){
+
+  let cfg = { capacity: 40, buffer: 18, workDays: 26 };
+  let sortMode = 'edd';
+  let projects = [];
+  let quoteVal = null, quoteReq = null, quoteOrder = null;
+
+  /* ── date helpers ──────────────────────────────────────────────────── */
+  const pad = n => (n<10?'0':'')+n;
+  function parseYMD(s){
     if(!s) return null;
-    const p=String(s).split('-'); if(p.length<2) return null;
-    const y=parseInt(p[0],10), mo=parseInt(p[1],10);
-    if(isNaN(y)||isNaN(mo)) return null;
-    const n=nowYM(); return (y-n.y)*12 + (mo-1-n.m);
+    const p = String(s).slice(0,10).split('-');
+    if(p.length<3) return null;
+    const y=+p[0], m=+p[1], d=+p[2];
+    if(!y||!m||!d) return null;
+    const dt = new Date(y, m-1, d); dt.setHours(0,0,0,0);
+    return isNaN(dt.getTime()) ? null : dt;
   }
-  function reqMonthLabel(s){
-    const p=String(s||'').split('-'); if(p.length<2) return '—';
-    const y=parseInt(p[0],10), mo=parseInt(p[1],10);
-    if(isNaN(y)||isNaN(mo)||mo<1||mo>12) return '—';
-    return MN[mo-1]+' '+y;
+  function today(){ const d=new Date(); d.setHours(0,0,0,0); return d; }
+  function addDays(d,n){ const x=new Date(d.getTime()); x.setDate(x.getDate()+n); x.setHours(0,0,0,0); return x; }
+  function dayDiff(a,b){ return Math.round((b.getTime()-a.getTime())/DAY_MS); }
+  function fmtDate(d){ return d ? d.getDate()+' '+MN[d.getMonth()]+' '+d.getFullYear() : '—'; }
+  function fmtShort(s){ const d=parseYMD(s); return d ? d.getDate()+' '+MN[d.getMonth()] : '—'; }
+  function todayStr(){ const t=today(); return t.getFullYear()+'-'+pad(t.getMonth()+1)+'-'+pad(t.getDate()); }
+  function isWorkDay(d){ return d.getDay() !== 0; }   // Sunday off
+
+  /* ── engine (day-wise) ─────────────────────────────────────────────── */
+  function dailySellable(){
+    const wd = cfg.workDays > 0 ? cfg.workDays : 26;
+    const s = (cfg.capacity / wd) * (1 - cfg.buffer/100);
+    return s > 0 ? s : 0.0001;
   }
-  function orderedProjects(){
-    if(sortMode==='edd'){
-      return projects.map((p,i)=>({p,i,r:reqIndex(p.requested)}))
-        .sort((a,b)=>{const ra=a.r==null?1e9:a.r, rb=b.r==null?1e9:b.r; return ra!==rb?ra-rb:a.i-b.i;})
-        .map(x=>x.p);
+  function timelineBase(){
+    let base = today();
+    projects.forEach(p => { const od = parseYMD(p.orderDate); if(od && od < base) base = od; });
+    const floor = addDays(today(), -365);
+    return base < floor ? floor : base;
+  }
+  function buildDays(base){
+    const cap = dailySellable(), out = new Array(HORIZON);
+    for(let i=0;i<HORIZON;i++){
+      const d = addDays(base, i), work = isWorkDay(d);
+      out[i] = { date:d, isWork:work, cap: work?cap:0, committed:0 };
     }
-    // 'intake' — first-come-first-served by createdAt
-    return projects.map((p,i)=>({p,i}))
-      .sort((a,b)=>{const ca=a.p.createdAt||0, cb=b.p.createdAt||0; return ca!==cb?ca-cb:a.i-b.i;})
-      .map(x=>x.p);
+    return out;
   }
-  function statusFor(reqIdx,endIdx,overflow){
-    if(reqIdx==null) return {cls:'',txt:'no date set'};
-    if(overflow)     return {cls:'over',txt:'LATE · beyond horizon',late:true};
-    const slack=reqIdx-endIdx;
-    if(slack<0)  return {cls:'over',txt:'LATE by '+(-slack)+' mo',late:true};
-    if(slack===0)return {cls:'tight',txt:'on time · no slack'};
-    return {cls:'ok',txt:'on time · '+slack+' mo slack',slack};
+  function orderedProjects(src){
+    if(sortMode === 'edd'){
+      return src.map((p,i)=>({p,i,r:parseYMD(p.requested)}))
+        .sort((a,b)=>{
+          const ra = a.r ? a.r.getTime() : Infinity, rb = b.r ? b.r.getTime() : Infinity;
+          return ra!==rb ? ra-rb : a.i-b.i;
+        }).map(x=>x.p);
+    }
+    return src.map((p,i)=>({p,i,o:parseYMD(p.orderDate)}))
+      .sort((a,b)=>{
+        const oa = a.o ? a.o.getTime() : Infinity, ob = b.o ? b.o.getTime() : Infinity;
+        return oa!==ob ? oa-ob : a.i-b.i;
+      }).map(x=>x.p);
   }
   function allocate(list){
-    const months=monthList();
-    let sellable=cfg.capacity*(1-cfg.buffer/100); if(sellable<=0) sellable=0.0001;
-    months.forEach(mo=>{mo.committed=0;mo.sellable=sellable;mo.capacity=cfg.capacity;});
-    const result=list.map(p=>{
-      let rem=p.value, s=null, e=null, ov=false;
-      for(let i=0;i<months.length&&rem>1e-4;i++){
-        const free=months[i].sellable-months[i].committed;
-        if(free<=1e-4) continue;
-        const take=Math.min(free,rem);
-        months[i].committed+=take; rem-=take;
-        if(s===null)s=i; e=i;
+    const src  = list || projects;
+    const base = timelineBase();
+    const days = buildDays(base);
+    const result = orderedProjects(src).map(p => {
+      const od = parseYMD(p.orderDate);
+      let startIdx = od ? dayDiff(base, od) : 0;
+      if(startIdx < 0) startIdx = 0;
+      let rem = p.value, first=null, last=null, overflow=false;
+      for(let i=startIdx; i<days.length && rem>1e-6; i++){
+        if(!days[i].isWork) continue;
+        const free = days[i].cap - days[i].committed;
+        if(free <= 1e-6) continue;
+        const take = Math.min(free, rem);
+        days[i].committed += take; rem -= take;
+        if(first===null) first=i;
+        last=i;
       }
-      if(rem>1e-4){ ov=true; e=months.length-1; }
-      return {p,startIdx:s,endIdx:e,overflow:ov};
+      if(rem > 1e-6){ overflow=true; last=days.length-1; }
+      return { p, firstIdx:first, lastIdx:last, overflow,
+        start: first!=null ? days[first].date : null,
+        finish: last!=null ? days[last].date : null };
     });
-    return {months,result};
+    return { base, days, result };
   }
-  function lakhFmt(v){ if(v==null||isNaN(v))return '—'; v=Math.round(v*10)/10; return String(Number.isInteger(v)?v:v.toFixed(1)); }
-  function moLabel(mo){ return mo.name+' '+mo.year; }
-  function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+  function statusFor(r){
+    if(!(r.p.value>0)) return {cls:'', txt:'set a value →'};
+    const want = parseYMD(r.p.requested);
+    if(!want)      return {cls:'', txt:'no handover date'};
+    if(r.overflow) return {cls:'over', txt:'LATE · beyond horizon', late:true};
+    const slack = dayDiff(r.finish, want);
+    if(slack < 0)   return {cls:'over',  txt:'LATE by '+(-slack)+' d', late:true};
+    if(slack === 0) return {cls:'tight', txt:'on time · no slack'};
+    if(slack <= 5)  return {cls:'tight', txt:'on time · '+slack+' d slack'};
+    return {cls:'ok', txt:'on time · '+slack+' d slack', slack};
+  }
+  function num(v){ if(v==null||isNaN(v)) return '—'; v=Math.round(v*10)/10; return String(Number.isInteger(v)?v:v.toFixed(1)); }
+  function esc(s){ return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 
   /* ── data ──────────────────────────────────────────────────────────── */
   async function loadAll(){
-    try{ const cs=await getDoc(doc(db,'config','capacity'));
-      if(cs.exists()){ const d=cs.data();
-        if(typeof d.monthlyOutput==='number') cfg.capacity=d.monthlyOutput;
-        if(typeof d.bufferPct==='number')     cfg.buffer=d.bufferPct; } }catch(e){}
-    const fin={};
-    try{ const fs=await getDocs(collection(db,'projectFinance'));
-      fs.forEach(d=>{ fin[d.id]=Number(d.data().value)||0; }); }catch(e){}
-    const ps=await getDocs(collection(db,'projects'));
-    projects=[];
-    ps.forEach(d=>{ const x=d.data();
-      if(DONE.indexOf(x.status)>=0) return;
-      projects.push({ id:d.id, name:x.projectName||'(unnamed)', client:x.location||'',
-        status:x.status||'', requested:x.handoverDate||'', value:fin[d.id]||0,
-        createdAt:(x.createdAt&&x.createdAt.seconds)?x.createdAt.seconds:0 }); });
+    try{
+      const cs = await getDoc(doc(db,'config','capacity'));
+      if(cs.exists()){
+        const d = cs.data();
+        if(typeof d.monthlyOutput==='number') cfg.capacity = d.monthlyOutput;
+        if(typeof d.bufferPct==='number')     cfg.buffer   = d.bufferPct;
+        if(typeof d.workDays==='number')      cfg.workDays = d.workDays;
+      }
+    }catch(e){}
+    const fin = {};
+    try{
+      const fs = await getDocs(collection(db,'projectFinance'));
+      fs.forEach(d => { fin[d.id] = Number(d.data().value)||0; });
+    }catch(e){}
+    const ps = await getDocs(collection(db,'projects'));
+    projects = [];
+    ps.forEach(d => {
+      const x = d.data();
+      if(DONE.indexOf(x.status) >= 0) return;
+      projects.push({
+        id:d.id, name:x.projectName||'(unnamed)', client:x.location||'',
+        status:x.status||'', orderDate:x.orderDate||'', requested:x.handoverDate||'',
+        value: fin[d.id]||0,
+        createdAt:(x.createdAt&&x.createdAt.seconds)?x.createdAt.seconds:0
+      });
+    });
   }
-  async function saveValue(id,val){ return setDoc(doc(db,'projectFinance',id),{value:val},{merge:true}); }
-  async function saveConfig(){ return setDoc(doc(db,'config','capacity'),{monthlyOutput:cfg.capacity,bufferPct:cfg.buffer},{merge:true}); }
+  const saveValue  = (id,val) => setDoc(doc(db,'projectFinance',id), {value:val}, {merge:true});
+  const saveConfig = () => setDoc(doc(db,'config','capacity'),
+    {monthlyOutput:cfg.capacity, bufferPct:cfg.buffer, workDays:cfg.workDays}, {merge:true});
 
   /* ── render ─────────────────────────────────────────────────────────── */
-  const $=id=>document.getElementById(id);
+  const $ = id => document.getElementById(id);
+
   function render(){
-    const sellable=cfg.capacity*(1-cfg.buffer/100);
-    $('lc-cap').value=cfg.capacity; $('lc-buf').value=cfg.buffer;
-    $('lc-sellable').textContent=lakhFmt(sellable)+'/mo';
-    $('lc-buffer').textContent=lakhFmt(cfg.capacity-sellable)+'/mo';
-
-    const alloc=allocate(orderedProjects());
-
-    // calendar
-    let last=0; alloc.months.forEach((m,i)=>{ if(m.committed>1e-4) last=i; });
-    const show=Math.min(alloc.months.length,Math.max(6,last+3));
-    let mh='';
-    for(let i=0;i<show;i++){ const mo=alloc.months[i];
-      const loadPct=mo.capacity>0?mo.committed/mo.capacity*100:0;
-      const bufPct=mo.capacity>0?(mo.capacity-mo.sellable)/mo.capacity*100:0;
-      const freeAmt=mo.sellable-mo.committed;
-      const over=mo.committed>mo.sellable+1e-4, tight=!over&&freeAmt<mo.sellable*0.15;
-      const lc=over?'over':(tight?'tight':'');
-      mh+='<div class="lc-mrow"><div class="lc-ml">'+mo.name+' <span>'+mo.year+'</span></div>'+
-        '<div class="lc-bar"><div class="lc-buf" style="width:'+bufPct+'%"></div>'+
-        '<div class="lc-fill '+lc+'" style="width:'+Math.min(loadPct,100)+'%"></div>'+
-        '<div class="lc-line" style="left:'+(100-bufPct)+'%"></div></div>'+
-        '<div class="lc-mf"><span class="'+(over?'lc-red':'')+'">'+lakhFmt(mo.committed)+' used</span><br>'+
-        '<span class="lc-free '+lc+'">'+(over?'OVER by '+lakhFmt(mo.committed-mo.sellable):lakhFmt(freeAmt)+' free')+'</span></div></div>';
-    }
-    $('lc-months').innerHTML=mh;
-
-    // order book
-    let rows='', risk=0, valued=0, lastEnd=-1, ovAny=false;
-    if(alloc.result.length===0){
-      rows='<tr><td colspan="5" class="lc-empty">No active projects in the queue. Projects appear here until their status is Delivered or Completed.</td></tr>';
-    }
-    alloc.result.forEach((r,i)=>{ const p=r.p;
-      const em=r.endIdx!=null?alloc.months[r.endIdx]:null;
-      const hasVal=p.value>0; if(hasVal) valued++;
-      const st=hasVal?statusFor(reqIndex(p.requested),r.endIdx,r.overflow):{cls:'',txt:'set a value →'};
-      if(st.late) risk++; if(r.overflow) ovAny=true;
-      if(r.endIdx!=null&&r.endIdx>lastEnd) lastEnd=r.endIdx;
-      const store=(st.slack&&st.slack>=2)?'<div class="lc-store">≈'+st.slack+' mo in store before delivery</div>':'';
-      rows+='<tr><td class="lc-red-n" style="color:var(--ink-3)">'+(i+1)+'</td>'+
-        '<td><div class="lc-pn">'+esc(p.name)+'</div><div class="lc-pc">'+esc(p.client)+' · '+esc(p.status)+'</div></td>'+
-        '<td class="r"><input class="lc-vinput" type="number" min="0" step="0.5" data-id="'+p.id+'" value="'+(hasVal?p.value:'')+'" placeholder="—"></td>'+
-        '<td>'+reqMonthLabel(p.requested)+'</td>'+
-        '<td>'+(hasVal?('<div class="lc-comp">'+(em?moLabel(em):'—')+(r.overflow?' <span class="lc-red">(beyond horizon)</span>':'')+'</div>'):'')+
-          '<span class="lc-pill '+(st.cls||'')+'">'+st.txt+'</span>'+store+'</td></tr>';
-    });
-    $('lc-body').innerHTML=rows;
-
-    $('lc-count').textContent=projects.length;
-    $('lc-valued').textContent=valued+' / '+projects.length;
-    $('lc-risk').textContent=risk; $('lc-risk').style.color=risk>0?'#c0392b':'var(--ink)';
-    $('lc-clears').textContent=lastEnd<0?'—':(ovAny?'> ':'')+moLabel(alloc.months[lastEnd]);
-
-    $('lc-sortEdd').classList.toggle('active',sortMode==='edd');
-    $('lc-sortManual').classList.toggle('active',sortMode==='manual');
+    $('lc-cap').value = cfg.capacity;
+    $('lc-buf').value = cfg.buffer;
+    $('lc-wd').value  = cfg.workDays;
+    $('lc-daily').textContent  = num(dailySellable())+'/day';
+    $('lc-perday').textContent = num(cfg.capacity/(cfg.workDays||26))+'/day';
+    const alloc = allocate();
+    renderCalendar(alloc);
+    renderBook(alloc);
     renderQuote();
+    $('lc-sortEdd').classList.toggle('active', sortMode==='edd');
+    $('lc-sortOrder').classList.toggle('active', sortMode==='order');
+  }
+
+  function renderCalendar(alloc){
+    const days = alloc.days;
+    let lastUsed = 0;
+    days.forEach((d,i) => { if(d.committed>1e-6) lastUsed = i; });
+    const show = Math.min(days.length, Math.max(62, lastUsed+10));
+    const t = today();
+
+    const months = [];
+    for(let i=0;i<show;i++){
+      const d = days[i], key = d.date.getFullYear()+'-'+d.date.getMonth();
+      let m = months[months.length-1];
+      if(!m || m.key!==key){
+        m = {key, label: MN[d.date.getMonth()]+' '+d.date.getFullYear(), cells:[], used:0, free:0};
+        months.push(m);
+      }
+      m.cells.push(d);
+      if(d.isWork){ m.used += d.committed; m.free += Math.max(0, d.cap-d.committed); }
+    }
+
+    let html = '';
+    months.forEach(m => {
+      let cells = '';
+      const firstDow = m.cells[0].date.getDay();
+      for(let k=0;k<firstDow;k++) cells += '<div class="lc-cell lc-pad"></div>';
+      m.cells.forEach(d => {
+        let cls = 'lc-cell', title = fmtDate(d.date);
+        if(!d.isWork){ cls += ' lc-off'; title += ' · weekly off'; }
+        else{
+          const ratio = d.cap>0 ? d.committed/d.cap : 0;
+          if(d.committed<=1e-6){ cls+=' lc-c0'; title += ' · FREE — '+num(d.cap)+' available'; }
+          else if(ratio>1.0001){ cls+=' lc-c4'; title += ' · OVER'; }
+          else if(ratio>=0.999){ cls+=' lc-c3'; title += ' · full ('+num(d.committed)+')'; }
+          else if(ratio>=0.5)  { cls+=' lc-c2'; title += ' · '+num(d.committed)+' used, '+num(d.cap-d.committed)+' free'; }
+          else                 { cls+=' lc-c1'; title += ' · '+num(d.committed)+' used, '+num(d.cap-d.committed)+' free'; }
+        }
+        if(d.date < t) cls += ' lc-past';
+        if(d.date.getTime()===t.getTime()) cls += ' lc-today';
+        cells += '<div class="'+cls+'" title="'+title+'">'+d.date.getDate()+'</div>';
+      });
+      html += '<div class="lc-mrow"><div class="lc-ml">'+m.label+'</div>'+
+              '<div class="lc-cells">'+cells+'</div>'+
+              '<div class="lc-mf"><span>'+num(m.used)+' used</span><br>'+
+              '<span class="lc-freetxt'+(m.free<=0.01?' zero':'')+'">'+num(m.free)+' free</span></div></div>';
+    });
+    $('lc-months').innerHTML = html;
+
+    let freeSoon = 0, freeDays = 0;
+    for(let i=0;i<days.length;i++){
+      const d = days[i];
+      if(!d.isWork || d.date < t) continue;
+      if(dayDiff(t, d.date) > 60) break;
+      const f = d.cap - d.committed;
+      if(f > 0.01){ freeSoon += f; freeDays++; }
+    }
+    $('lc-free60').textContent   = num(freeSoon);
+    $('lc-freedays').textContent = freeDays;
+  }
+
+  function renderBook(alloc){
+    let rows='', risk=0, valued=0, lastFinish=null, ovAny=false;
+    if(alloc.result.length===0){
+      rows = '<tr><td colspan="6" class="lc-empty">No active projects in the queue. Projects stay here until their status is Delivered or Completed.</td></tr>';
+    }
+    alloc.result.forEach((r,i) => {
+      const p = r.p, st = statusFor(r), hasVal = p.value>0;
+      if(hasVal) valued++;
+      if(st.late) risk++;
+      if(r.overflow) ovAny = true;
+      if(hasVal && r.finish && (!lastFinish || r.finish>lastFinish)) lastFinish = r.finish;
+      const store = (st.slack && st.slack>=30) ? '<div class="lc-store">≈'+st.slack+' d in store before handover</div>' : '';
+      const runs  = (hasVal && r.start && r.finish)
+        ? '<div class="lc-runs">runs '+fmtDate(r.start)+' → '+fmtDate(r.finish)+'</div>' : '';
+      rows += '<tr>'+
+        '<td class="lc-idx">'+(i+1)+'</td>'+
+        '<td><div class="lc-pn">'+esc(p.name)+'</div><div class="lc-pc">'+esc(p.client)+' · '+esc(p.status)+'</div></td>'+
+        '<td class="lc-dt">'+fmtShort(p.orderDate)+'</td>'+
+        '<td class="r"><input class="lc-vinput" type="number" min="0" step="0.5" data-id="'+p.id+'" value="'+(hasVal?p.value:'')+'" placeholder="—"></td>'+
+        '<td class="lc-dt">'+fmtShort(p.requested)+'</td>'+
+        '<td>'+(hasVal&&r.finish?'<div class="lc-comp">'+fmtDate(r.finish)+(r.overflow?' <span class="lc-red">(beyond horizon)</span>':'')+'</div>':'')+
+          '<span class="lc-pill '+(st.cls||'')+'">'+st.txt+'</span>'+runs+store+'</td></tr>';
+    });
+    $('lc-body').innerHTML = rows;
+    $('lc-count').textContent  = projects.length;
+    $('lc-valued').textContent = valued+' / '+projects.length;
+    $('lc-risk').textContent   = risk;
+    $('lc-risk').style.color   = risk>0 ? '#c0392b' : 'var(--ink)';
+    $('lc-clears').textContent = lastFinish ? (ovAny?'> ':'')+fmtDate(lastFinish) : '—';
   }
 
   function renderQuote(){
-    const el=$('lc-quoteResult');
-    if(quoteVal==null||isNaN(quoteVal)||quoteVal<=0){ el.className='lc-qr lc-muted'; el.textContent='Enter a value above.'; return; }
-    const hyp={id:'__q',value:quoteVal,requested:quoteReq||''};
-    let list=projects.concat([hyp]);
-    if(sortMode==='edd'){
-      list=list.map((p,i)=>({p,i,r:reqIndex(p.requested)}))
-        .sort((a,b)=>{const ra=a.r==null?1e9:a.r,rb=b.r==null?1e9:b.r; return ra!==rb?ra-rb:a.i-b.i;}).map(x=>x.p);
+    const el = $('lc-quoteResult');
+    if(quoteVal==null || isNaN(quoteVal) || quoteVal<=0){
+      el.className='lc-qr lc-muted'; el.textContent='Enter a value above.'; return;
     }
-    const alloc=allocate(list); let r=null;
-    for(const x of alloc.result){ if(x.p.id==='__q'){ r=x; break; } }
-    const em=r.endIdx!=null?alloc.months[r.endIdx]:null;
-    const need=r.startIdx!=null?(r.endIdx-r.startIdx+1):1;
-    const sellable=cfg.capacity*(1-cfg.buffer/100);
-    const reqIdx=reqIndex(quoteReq);
-    el.className='lc-qr';
-    if(reqIdx!=null){
-      const st=statusFor(reqIdx,r.endIdx,r.overflow);
-      if(st.late){
-        el.innerHTML='<span class="lc-pill over">can’t hit that date</span><br>Earliest completion is <b>'+(em?moLabel(em):'—')+'</b> — '+st.txt.toLowerCase()+'.<br><span class="lc-muted">Offer end of '+(em?moLabel(em):'—')+', or bump it up the queue — which pushes another project.</span>';
-      }else{
-        el.innerHTML='<span class="lc-pill '+(st.cls==='tight'?'tight':'ok')+'">fits the requested date</span><br>Completes <b>'+moLabel(em)+'</b> — '+st.txt+'.<br><span class="lc-muted">Safe to confirm. Needs '+need+' production month(s) of '+lakhFmt(sellable)+'/mo.</span>';
-      }
-    }else{
-      el.innerHTML='Completes <b>'+(em?moLabel(em):'—')+'</b>.<br><span class="lc-muted">Promise end of '+(em?moLabel(em):'—')+' or later. Needs '+need+' production month(s) of '+lakhFmt(sellable)+'/mo.</span>';
+    const od = quoteOrder || todayStr();
+    const hyp = { id:'__q', name:'quote', client:'', status:'', orderDate:od, requested:quoteReq||'', value:quoteVal, createdAt:0 };
+    const alloc = allocate(projects.concat([hyp]));
+    let r=null; for(const x of alloc.result){ if(x.p.id==='__q'){ r=x; break; } }
+    const st = statusFor(r);
+    const ds = dailySellable();
+    const wdays = (r.firstIdx!=null && r.lastIdx!=null)
+      ? alloc.days.slice(r.firstIdx, r.lastIdx+1).filter(d=>d.isWork && d.committed>1e-6).length : 0;
+    el.className = 'lc-qr';
+    if(!quoteReq){
+      el.innerHTML = 'Ordered '+fmtDate(parseYMD(od))+' → completes <b>'+fmtDate(r.finish)+'</b>.'+
+        '<br><span class="lc-muted">Promise handover on or after that date. Spans ~'+wdays+' working days at '+num(ds)+'/day.</span>';
+    } else if(st.late){
+      el.innerHTML = '<span class="lc-pill over">can’t hit that date</span><br>Earliest completion is <b>'+fmtDate(r.finish)+'</b> — '+st.txt.toLowerCase()+'.'+
+        '<br><span class="lc-muted">Offer that date, or move it up the queue — which pushes another project.</span>';
+    } else {
+      el.innerHTML = '<span class="lc-pill '+(st.cls==='tight'?'tight':'ok')+'">fits the requested date</span><br>Completes <b>'+fmtDate(r.finish)+'</b> — '+st.txt+'.'+
+        '<br><span class="lc-muted">Safe to confirm. Spans ~'+wdays+' working days at '+num(ds)+'/day.</span>';
     }
   }
 
   /* ── events ─────────────────────────────────────────────────────────── */
-  $('lc-cap').addEventListener('input',function(){ cfg.capacity=Math.max(0,+this.value||0); render(); });
-  $('lc-buf').addEventListener('input',function(){ cfg.buffer=Math.min(60,Math.max(0,+this.value||0)); render(); });
-  $('lc-save').addEventListener('click',function(){
+  $('lc-cap').addEventListener('input', function(){ cfg.capacity=Math.max(0,+this.value||0); render(); });
+  $('lc-buf').addEventListener('input', function(){ cfg.buffer=Math.min(60,Math.max(0,+this.value||0)); render(); });
+  $('lc-wd').addEventListener('input',  function(){ cfg.workDays=Math.min(31,Math.max(1,+this.value||26)); render(); });
+  $('lc-save').addEventListener('click', function(){
     const b=this; b.disabled=true; b.textContent='Saving…';
     saveConfig().then(()=>{b.textContent='Saved ✓';}).catch(()=>{b.textContent='Save failed';})
       .finally(()=>setTimeout(()=>{b.disabled=false;b.textContent='Save settings';},1400));
   });
-  $('lc-quoteVal').addEventListener('input',function(){ quoteVal=this.value===''?null:+this.value; renderQuote(); });
-  $('lc-quoteReq').addEventListener('change',function(){ quoteReq=this.value||null; renderQuote(); });
-  $('lc-sortEdd').addEventListener('click',()=>{ sortMode='edd'; render(); });
-  $('lc-sortManual').addEventListener('click',()=>{ sortMode='manual'; render(); });
-  $('lc-body').addEventListener('change',function(e){
+  $('lc-quoteVal').addEventListener('input', function(){ quoteVal=this.value===''?null:+this.value; renderQuote(); });
+  $('lc-quoteReq').addEventListener('change', function(){ quoteReq=this.value||null; renderQuote(); });
+  $('lc-quoteOrder').addEventListener('change', function(){ quoteOrder=this.value||null; renderQuote(); });
+  $('lc-sortEdd').addEventListener('click', ()=>{ sortMode='edd'; render(); });
+  $('lc-sortOrder').addEventListener('click', ()=>{ sortMode='order'; render(); });
+  $('lc-body').addEventListener('change', function(e){
     const t=e.target; if(!t.classList.contains('lc-vinput')) return;
     const id=t.dataset.id, val=Math.max(0,+t.value||0);
     const p=projects.find(x=>x.id===id); if(p){ p.value=val; render(); }
@@ -1151,24 +1296,25 @@
   });
 
   /* ── auth guard (admin only) ───────────────────────────────────────── */
-  onAuthStateChanged(auth, async (user)=>{
+  onAuthStateChanged(auth, async (user) => {
     if(!user){ window.location.href='login.html'; return; }
-    const snap=await getDoc(doc(db,'users',user.uid));
-    const data=snap.exists()?snap.data():{};
-    const role=data.role||'sales';
-    if(role!=='admin'){ window.location.href='dashboard.html'; return; }   // ← admin gate
-    const name=data.name||user.email.split('@')[0];
-    $('user-name').textContent=name;
-    $('user-role').textContent=role;
-    $('user-avatar').textContent=name.substring(0,2).toUpperCase();
+    const snap = await getDoc(doc(db,'users',user.uid));
+    const data = snap.exists() ? snap.data() : {};
+    const role = data.role || 'sales';
+    if(role !== 'admin'){ window.location.href='dashboard.html'; return; }
+    const name = data.name || user.email.split('@')[0];
+    $('user-name').textContent = name;
+    $('user-role').textContent = role;
+    $('user-avatar').textContent = name.substring(0,2).toUpperCase();
     $('nav-admin-section').style.display='block';
     $('nav-capacity').style.display='flex';
     $('nav-admin').style.display='flex';
     const bnC=$('bn-capacity'); if(bnC) bnC.style.display='flex';
-    const bnA=$('bn-admin'); if(bnA) bnA.style.display='flex';
+    const bnA=$('bn-admin');    if(bnA) bnA.style.display='flex';
+    $('lc-quoteOrder').value = todayStr();
     await loadAll();
     render();
   });
-  window.signOut=async function(){ await fbSignOut(auth); window.location.href='login.html'; };
+  window.signOut = async function(){ await fbSignOut(auth); window.location.href='login.html'; };
 
 </script></body></html>

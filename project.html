@@ -80,7 +80,7 @@
   .project-header-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
   .project-title { font-family: var(--font-disp); font-size: 24px; font-weight: 500; margin-bottom: 4px; }
   .project-order { font-size: 13px; color: var(--ink-3); }
-  .project-meta-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+  .project-meta-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; }
   .meta-item label { font-size: 11px; font-weight: 500; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 4px; }
   .meta-item span { font-size: 14px; color: var(--ink); }
 
@@ -542,6 +542,7 @@
         ${project.address ? `<div class="meta-item" style="grid-column:1/-1"><label>Address</label><span style="white-space:pre-line">${esc(project.address)}</span></div>` : ''}
         ${project.coordinates ? `<div class="meta-item"><label>Coordinates</label><span>${project.coordinates.startsWith('http') ? `<a href="${esc(project.coordinates)}" target="_blank" style="color:var(--gold);text-decoration:none">Open in Maps ↗</a>` : esc(project.coordinates)}</span></div>` : ''}
           <div class="meta-item"><label>Assignee</label><span>${esc(project.assignee || '—')}</span></div>
+          <div class="meta-item"><label>Order date</label><span>${formatDate(project.orderDate)}</span></div>
           <div class="meta-item"><label>Handover</label><span>${formatDate(project.handoverDate)}</span></div>
           <div class="meta-item"><label>Contact</label><span>${esc(project.contactNo || '—')}</span></div>
           <div class="meta-item"><label>Fabric</label><span>${esc(project.fabricStatus || 'Not selected')}</span></div>
