@@ -787,6 +787,9 @@
   .lc-tbl th,.lc-tbl td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:top}
   .lc-tbl th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);font-weight:600}
   .lc-tbl .r{text-align:right}
+  .lc-tbl .c{text-align:center}
+  .lc-early{width:16px;height:16px;accent-color:var(--gold);cursor:pointer}
+  .lc-earlyrow{background:linear-gradient(90deg,rgba(201,162,39,.09),transparent 60%)}
   .lc-idx{color:var(--ink-3);font-size:12px}
   .lc-dt{font-size:12px;color:var(--ink-2);white-space:nowrap}
   .lc-vinput{width:70px;padding:5px 7px;border:1px solid var(--border);border-radius:5px;text-align:right;font-size:13px;font-family:var(--font-sans);background:var(--white);color:var(--ink)}
@@ -882,6 +885,14 @@
           <input id="lc-wd" class="lc-inp" type="number" min="1" max="31" value="26">
           <div class="lc-hint">Sundays are treated as the weekly off in the calendar.</div>
 
+          <label class="lc-lab">Finish this many days before handover</label>
+          <input id="lc-lead" class="lc-inp" type="number" min="0" max="60" value="5">
+          <div class="lc-hint">The schedule aims at handover minus this. It's the safety margin for QC, touch-ups and transport — not spare time to sell.</div>
+
+          <label class="lc-lab">Minimum production days per project</label>
+          <input id="lc-min" class="lc-inp" type="number" min="1" max="60" value="3">
+          <div class="lc-hint">No job can go faster than this, however small. Carpentry, upholstery and polish each need their turn, and polish has to cure — capacity can't buy that away.</div>
+
           <label class="lc-lab">Projects worked in parallel</label>
           <input id="lc-wip" class="lc-inp" type="number" min="1" max="40" value="6">
           <div class="lc-hint">How many jobs are on the floor at once. Each working day's capacity is shared between them, so small jobs finish early without blocking big ones. Raise this and everything slows down together.</div>
@@ -946,13 +957,14 @@
               <th style="width:20px">#</th>
               <th>Project / location</th>
               <th style="width:64px">Ordered</th>
-              <th class="r" style="width:80px">Value</th>
+              <th class="r" style="width:76px">Value</th>
+              <th class="c" style="width:52px" title="Build as early as possible and hold in the warehouse">Early</th>
               <th style="width:64px">Wanted</th>
-              <th style="width:180px">Delivery / status</th>
+              <th style="width:190px">Delivery / status</th>
             </tr></thead>
             <tbody id="lc-body"></tbody>
           </table>
-          <div class="lc-hint" style="margin-top:8px">Jobs run together, sharing each day's capacity from their order date — so a small project finishes well before a large one started alongside it. Enter a value to schedule a project. Values save to an admin-only collection.</div>
+          <div class="lc-hint" style="margin-top:8px">Jobs run together, sharing each day's capacity from their order date — so a small project finishes well before a large one started alongside it. Tick <b>Early</b> to build a project as soon as possible and hold it in the warehouse; those jump the queue. Enter a value to schedule a project.</div>
           <div class="lc-tot">
             <div>Projects<b id="lc-count">0</b></div>
             <div>Valued<b id="lc-valued">—</b></div>
@@ -1016,7 +1028,7 @@
   const DONE    = ['Delivered','Completed','Complaints'];
   const MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-  let cfg = { capacity: 40, buffer: 18, workDays: 26, wip: 6 };
+  let cfg = { capacity: 40, buffer: 18, workDays: 26, wip: 6, leadDays: 5, minDays: 3 };
   let sortMode = 'edd';
   let projects = [];
   let quoteVal = null, quoteReq = null, quoteOrder = null;
@@ -1061,65 +1073,91 @@
     return out;
   }
   function orderedProjects(src){
-    if(sortMode === 'edd'){
-      return src.map((p,i)=>({p,i,r:parseYMD(p.requested)}))
-        .sort((a,b)=>{
-          const ra = a.r ? a.r.getTime() : Infinity, rb = b.r ? b.r.getTime() : Infinity;
-          return ra!==rb ? ra-rb : a.i-b.i;
-        }).map(x=>x.p);
-    }
-    return src.map((p,i)=>({p,i,o:parseYMD(p.orderDate)}))
-      .sort((a,b)=>{
-        const oa = a.o ? a.o.getTime() : Infinity, ob = b.o ? b.o.getTime() : Infinity;
-        return oa!==ob ? oa-ob : a.i-b.i;
-      }).map(x=>x.p);
+    const keyed = src.map((p,i) => ({
+      p, i,
+      early: p.early ? 0 : 1,                                  // early jobs first
+      t: (sortMode==='edd' ? targetDate(p) : parseYMD(p.orderDate))
+    }));
+    keyed.sort((a,b) => {
+      if(a.early !== b.early) return a.early - b.early;
+      const ta = a.t ? a.t.getTime() : Infinity, tb = b.t ? b.t.getTime() : Infinity;
+      return ta !== tb ? ta - tb : a.i - b.i;
+    });
+    return keyed.map(x => x.p);
   }
+
   // Projects run CONCURRENTLY: every working day the floor's capacity is shared
-  // between the jobs currently in production, so a small job finishes early
-  // without ever blocking a big one. cfg.wip caps how many run at once.
+  // between the jobs in production, so a small job finishes early without
+  // blocking a big one. Two physical limits apply:
+  //   cfg.wip     — how many jobs can be on the floor at once
+  //   cfg.minDays — no job can be compressed below this many working days,
+  //                 because carpentry, upholstery and polish each need their
+  //                 turn and polish has to cure. Capacity cannot buy that away.
   function allocate(list){
     const src  = list || projects;
     const base = timelineBase();
     const days = buildDays(base);
     const order = orderedProjects(src);
+    const minD = cfg.minDays > 0 ? cfg.minDays : 1;
 
-    // per-project running state, with the first day it may be worked on
     const st = order.map(p => {
       const od = parseYMD(p.orderDate);
       let s0 = od ? dayDiff(base, od) : 0;
       if(s0 < 0) s0 = 0;
-      return { p, rem: p.value > 0 ? p.value : 0, startIdx: s0, first: null, last: null };
+      const val = p.value > 0 ? p.value : 0;
+      return {
+        p, rem: val, startIdx: s0, first: null, last: null,
+        maxPerDay: val > 0 ? val / minD : 0    // spreads the job over >= minD days
+      };
     });
 
     for(let i=0; i<days.length; i++){
       const day = days[i];
       if(!day.isWork) continue;
 
-      // jobs that are ordered, valued and unfinished — earliest priority first
       const eligible = [];
       for(const x of st){
         if(x.rem > 1e-6 && x.startIdx <= i){
           eligible.push(x);
-          if(eligible.length >= cfg.wip) break;   // only so many on the floor at once
+          if(eligible.length >= cfg.wip) break;
         }
       }
       if(!eligible.length) continue;
 
-      // share the day evenly; whatever a finishing job doesn't need flows to the rest
+      const takenToday = new Map();
       let pool = day.cap;
-      let actives = eligible;
+
+      // "Build early for stock" jobs get FIRST call on the day's capacity, up to
+      // their per-day ceiling, so they finish as fast as physically possible.
+      // Whatever is left is then shared by the rest.
+      for(const x of eligible){
+        if(!x.p.early || pool <= 1e-6) continue;
+        const take = Math.min(pool, x.rem, x.maxPerDay);
+        if(take > 1e-9){
+          x.rem -= take; pool -= take;
+          takenToday.set(x, take);
+          if(x.first === null) x.first = i;
+          x.last = i;
+        }
+      }
+
+      let actives = eligible.filter(x => x.rem > 1e-6 &&
+        (x.maxPerDay - (takenToday.get(x)||0)) > 1e-6);
       while(pool > 1e-6 && actives.length){
         const share = pool / actives.length;
         let used = 0;
         const still = [];
         for(const x of actives){
-          const take = Math.min(share, x.rem);
+          const already = takenToday.get(x) || 0;
+          const room = x.maxPerDay - already;               // curing/stage limit
+          const take = Math.min(share, x.rem, room);
           if(take > 1e-9){
             x.rem -= take; used += take;
+            takenToday.set(x, already + take);
             if(x.first === null) x.first = i;
             x.last = i;
           }
-          if(x.rem > 1e-6) still.push(x);
+          if(x.rem > 1e-6 && (x.maxPerDay - (takenToday.get(x)||0)) > 1e-6) still.push(x);
         }
         pool -= used;
         actives = still;
@@ -1142,17 +1180,35 @@
     return { base, days, result };
   }
 
+  // The date we actually aim at: finish this many days BEFORE handover.
+  function targetDate(p){
+    const want = parseYMD(p.requested);
+    return want ? addDays(want, -cfg.leadDays) : null;
+  }
   function statusFor(r){
     if(!(r.p.value>0)) return {cls:'', txt:'set a value →'};
     const want = parseYMD(r.p.requested);
     if(!want)      return {cls:'', txt:'no handover date'};
-    if(r.overflow) return {cls:'over', txt:'LATE · beyond horizon', late:true};
-    const slack = dayDiff(r.finish, want);
-    if(slack < 0)   return {cls:'over',  txt:'LATE by '+(-slack)+' d', late:true};
-    if(slack === 0) return {cls:'tight', txt:'on time · no slack'};
-    if(slack <= 5)  return {cls:'tight', txt:'on time · '+slack+' d slack'};
-    return {cls:'ok', txt:'on time · '+slack+' d slack', slack};
+    const target = targetDate(r.p);
+    if(r.overflow) return {cls:'over', txt:'LATE · beyond horizon', late:true, risk:true};
+
+    // Built for stock: finish as early as possible, then it waits in the warehouse.
+    if(r.p.early){
+      const store = dayDiff(r.finish, want);
+      if(store < 0) return {cls:'over', txt:'LATE by '+(-store)+' d', late:true, risk:true};
+      return {cls:'ok', txt:'early · '+store+' d in store', store};
+    }
+    const vsTarget = dayDiff(r.finish, target);   // >0 = finished before target
+    if(vsTarget >= 0){
+      return {cls:'ok', txt:'on time · '+vsTarget+' d clear of margin', slack:vsTarget, store:dayDiff(r.finish,want)};
+    }
+    const vsWant = dayDiff(r.finish, want);
+    if(vsWant >= 0){
+      return {cls:'tight', txt:'tight · only '+vsWant+' d before handover', risk:true};
+    }
+    return {cls:'over', txt:'LATE by '+(-vsWant)+' d', late:true, risk:true};
   }
+
   function num(v){ if(v==null||isNaN(v)) return '—'; v=Math.round(v*10)/10; return String(Number.isInteger(v)?v:v.toFixed(1)); }
   function esc(s){ return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 
@@ -1166,12 +1222,14 @@
         if(typeof d.bufferPct==='number')     cfg.buffer   = d.bufferPct;
         if(typeof d.workDays==='number')      cfg.workDays = d.workDays;
         if(typeof d.wip==='number')           cfg.wip      = d.wip;
+        if(typeof d.leadDays==='number')      cfg.leadDays = d.leadDays;
+        if(typeof d.minDays==='number')       cfg.minDays  = d.minDays;
       }
     }catch(e){}
     const fin = {};
     try{
       const fs = await getDocs(collection(db,'projectFinance'));
-      fs.forEach(d => { fin[d.id] = Number(d.data().value)||0; });
+      fs.forEach(d => { const v=d.data(); fin[d.id] = { value:Number(v.value)||0, early: !!v.early }; });
     }catch(e){}
     const ps = await getDocs(collection(db,'projects'));
     projects = [];
@@ -1181,14 +1239,17 @@
       projects.push({
         id:d.id, name:x.projectName||'(unnamed)', client:x.location||'',
         status:x.status||'', orderDate:x.orderDate||'', requested:x.handoverDate||'',
-        value: fin[d.id]||0,
+        value: (fin[d.id]&&fin[d.id].value)||0,
+        early: !!(fin[d.id]&&fin[d.id].early),
         createdAt:(x.createdAt&&x.createdAt.seconds)?x.createdAt.seconds:0
       });
     });
   }
-  const saveValue  = (id,val) => setDoc(doc(db,'projectFinance',id), {value:val}, {merge:true});
+  const saveValue = (id,val) => setDoc(doc(db,'projectFinance',id), {value:val}, {merge:true});
+  const saveEarly = (id,flag) => setDoc(doc(db,'projectFinance',id), {early:!!flag}, {merge:true});
   const saveConfig = () => setDoc(doc(db,'config','capacity'),
-    {monthlyOutput:cfg.capacity, bufferPct:cfg.buffer, workDays:cfg.workDays, wip:cfg.wip}, {merge:true});
+    {monthlyOutput:cfg.capacity, bufferPct:cfg.buffer, workDays:cfg.workDays, wip:cfg.wip,
+     leadDays:cfg.leadDays, minDays:cfg.minDays}, {merge:true});
 
   /* ── render ─────────────────────────────────────────────────────────── */
   const $ = id => document.getElementById(id);
@@ -1197,7 +1258,9 @@
     $('lc-cap').value = cfg.capacity;
     $('lc-buf').value = cfg.buffer;
     $('lc-wd').value  = cfg.workDays;
-    $('lc-wip').value = cfg.wip;
+    $('lc-wip').value  = cfg.wip;
+    $('lc-lead').value = cfg.leadDays;
+    $('lc-min').value  = cfg.minDays;
     $('lc-daily').textContent  = num(dailySellable())+'/day';
     $('lc-perday').textContent = num(cfg.capacity/(cfg.workDays||26))+'/day';
     const alloc = allocate();
@@ -1269,25 +1332,29 @@
   function renderBook(alloc){
     let rows='', risk=0, valued=0, lastFinish=null, ovAny=false;
     if(alloc.result.length===0){
-      rows = '<tr><td colspan="6" class="lc-empty">No active projects in the queue. Projects stay here until their status is Delivered or Completed.</td></tr>';
+      rows = '<tr><td colspan="7" class="lc-empty">No active projects in the queue. Projects stay here until their status is Delivered or Completed.</td></tr>';
     }
     alloc.result.forEach((r,i) => {
       const p = r.p, st = statusFor(r), hasVal = p.value>0;
       if(hasVal) valued++;
-      if(st.late) risk++;
+      if(st.risk) risk++;
       if(r.overflow) ovAny = true;
       if(hasVal && r.finish && (!lastFinish || r.finish>lastFinish)) lastFinish = r.finish;
-      const store = (st.slack && st.slack>=30) ? '<div class="lc-store">≈'+st.slack+' d in store before handover</div>' : '';
-      const runs  = (hasVal && r.start && r.finish)
+      const storeNote = (st.store && st.store >= 20)
+        ? '<div class="lc-store">≈'+st.store+' d in store before handover</div>' : '';
+      const runs = (hasVal && r.start && r.finish)
         ? '<div class="lc-runs">runs '+fmtDate(r.start)+' → '+fmtDate(r.finish)+'</div>' : '';
-      rows += '<tr>'+
+      const tgt = targetDate(p);
+      const tgtNote = (!p.early && tgt) ? '<div class="lc-runs">aim: '+fmtDate(tgt)+'</div>' : '';
+      rows += '<tr'+(p.early?' class="lc-earlyrow"':'')+'>'+
         '<td class="lc-idx">'+(i+1)+'</td>'+
         '<td><div class="lc-pn">'+esc(p.name)+'</div><div class="lc-pc">'+esc(p.client)+' · '+esc(p.status)+'</div></td>'+
         '<td class="lc-dt">'+fmtShort(p.orderDate)+'</td>'+
         '<td class="r"><input class="lc-vinput" type="number" min="0" step="0.5" data-id="'+p.id+'" value="'+(hasVal?p.value:'')+'" placeholder="—"></td>'+
+        '<td class="c"><input class="lc-early" type="checkbox" data-id="'+p.id+'"'+(p.early?' checked':'')+' title="Build as early as possible and hold in the warehouse"></td>'+
         '<td class="lc-dt">'+fmtShort(p.requested)+'</td>'+
         '<td>'+(hasVal&&r.finish?'<div class="lc-comp">'+fmtDate(r.finish)+(r.overflow?' <span class="lc-red">(beyond horizon)</span>':'')+'</div>':'')+
-          '<span class="lc-pill '+(st.cls||'')+'">'+st.txt+'</span>'+runs+store+'</td></tr>';
+          '<span class="lc-pill '+(st.cls||'')+'">'+st.txt+'</span>'+runs+tgtNote+storeNote+'</td></tr>';
     });
     $('lc-body').innerHTML = rows;
     $('lc-count').textContent  = projects.length;
@@ -1328,6 +1395,8 @@
   $('lc-buf').addEventListener('input', function(){ cfg.buffer=Math.min(60,Math.max(0,+this.value||0)); render(); });
   $('lc-wd').addEventListener('input',  function(){ cfg.workDays=Math.min(31,Math.max(1,+this.value||26)); render(); });
   $('lc-wip').addEventListener('input', function(){ cfg.wip=Math.min(40,Math.max(1,+this.value||6)); render(); });
+  $('lc-lead').addEventListener('input', function(){ cfg.leadDays=Math.min(60,Math.max(0,+this.value||0)); render(); });
+  $('lc-min').addEventListener('input',  function(){ cfg.minDays=Math.min(60,Math.max(1,+this.value||1)); render(); });
   $('lc-save').addEventListener('click', function(){
     const b=this; b.disabled=true; b.textContent='Saving…';
     saveConfig().then(()=>{b.textContent='Saved ✓';}).catch(()=>{b.textContent='Save failed';})
@@ -1339,7 +1408,14 @@
   $('lc-sortEdd').addEventListener('click', ()=>{ sortMode='edd'; render(); });
   $('lc-sortOrder').addEventListener('click', ()=>{ sortMode='order'; render(); });
   $('lc-body').addEventListener('change', function(e){
-    const t=e.target; if(!t.classList.contains('lc-vinput')) return;
+    const t=e.target;
+    if(t.classList.contains('lc-early')){
+      const id=t.dataset.id, flag=t.checked;
+      const p=projects.find(x=>x.id===id); if(p){ p.early=flag; render(); }
+      saveEarly(id,flag).catch(err=>console.error('save early failed',err));
+      return;
+    }
+    if(!t.classList.contains('lc-vinput')) return;
     const id=t.dataset.id, val=Math.max(0,+t.value||0);
     const p=projects.find(x=>x.id===id); if(p){ p.value=val; render(); }
     saveValue(id,val).catch(err=>console.error('save value failed',err));
