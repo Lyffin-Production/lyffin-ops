@@ -882,6 +882,10 @@
           <input id="lc-wd" class="lc-inp" type="number" min="1" max="31" value="26">
           <div class="lc-hint">Sundays are treated as the weekly off in the calendar.</div>
 
+          <label class="lc-lab">Projects worked in parallel</label>
+          <input id="lc-wip" class="lc-inp" type="number" min="1" max="40" value="6">
+          <div class="lc-hint">How many jobs are on the floor at once. Each working day's capacity is shared between them, so small jobs finish early without blocking big ones. Raise this and everything slows down together.</div>
+
           <label class="lc-lab">Buffer held back (%)</label>
           <input id="lc-buf" class="lc-inp" type="number" min="0" max="60" value="18">
           <div class="lc-hint">Reserved for leave, rework &amp; complaints, and client slippage.</div>
@@ -903,7 +907,7 @@
           <label class="lc-lab">Client's requested handover (optional)</label>
           <input id="lc-quoteReq" class="lc-inp" type="date">
           <div id="lc-quoteResult" class="lc-qr lc-muted">Enter a value above.</div>
-          <div class="lc-hint" style="margin-top:8px">Work starts from the order date and fills the first free days in the calendar.</div>
+          <div class="lc-hint" style="margin-top:8px">Work starts from the order date and shares each day with the other jobs already running.</div>
         </div>
       </div>
 
@@ -948,7 +952,7 @@
             </tr></thead>
             <tbody id="lc-body"></tbody>
           </table>
-          <div class="lc-hint" style="margin-top:8px">Delivery is computed from the order date forward. Enter a value to schedule a project. Values save to an admin-only collection.</div>
+          <div class="lc-hint" style="margin-top:8px">Jobs run together, sharing each day's capacity from their order date — so a small project finishes well before a large one started alongside it. Enter a value to schedule a project. Values save to an admin-only collection.</div>
           <div class="lc-tot">
             <div>Projects<b id="lc-count">0</b></div>
             <div>Valued<b id="lc-valued">—</b></div>
@@ -1012,7 +1016,7 @@
   const DONE    = ['Delivered','Completed','Complaints'];
   const MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-  let cfg = { capacity: 40, buffer: 18, workDays: 26 };
+  let cfg = { capacity: 40, buffer: 18, workDays: 26, wip: 6 };
   let sortMode = 'edd';
   let projects = [];
   let quoteVal = null, quoteReq = null, quoteOrder = null;
@@ -1070,31 +1074,74 @@
         return oa!==ob ? oa-ob : a.i-b.i;
       }).map(x=>x.p);
   }
+  // Projects run CONCURRENTLY: every working day the floor's capacity is shared
+  // between the jobs currently in production, so a small job finishes early
+  // without ever blocking a big one. cfg.wip caps how many run at once.
   function allocate(list){
     const src  = list || projects;
     const base = timelineBase();
     const days = buildDays(base);
-    const result = orderedProjects(src).map(p => {
+    const order = orderedProjects(src);
+
+    // per-project running state, with the first day it may be worked on
+    const st = order.map(p => {
       const od = parseYMD(p.orderDate);
-      let startIdx = od ? dayDiff(base, od) : 0;
-      if(startIdx < 0) startIdx = 0;
-      let rem = p.value, first=null, last=null, overflow=false;
-      for(let i=startIdx; i<days.length && rem>1e-6; i++){
-        if(!days[i].isWork) continue;
-        const free = days[i].cap - days[i].committed;
-        if(free <= 1e-6) continue;
-        const take = Math.min(free, rem);
-        days[i].committed += take; rem -= take;
-        if(first===null) first=i;
-        last=i;
+      let s0 = od ? dayDiff(base, od) : 0;
+      if(s0 < 0) s0 = 0;
+      return { p, rem: p.value > 0 ? p.value : 0, startIdx: s0, first: null, last: null };
+    });
+
+    for(let i=0; i<days.length; i++){
+      const day = days[i];
+      if(!day.isWork) continue;
+
+      // jobs that are ordered, valued and unfinished — earliest priority first
+      const eligible = [];
+      for(const x of st){
+        if(x.rem > 1e-6 && x.startIdx <= i){
+          eligible.push(x);
+          if(eligible.length >= cfg.wip) break;   // only so many on the floor at once
+        }
       }
-      if(rem > 1e-6){ overflow=true; last=days.length-1; }
-      return { p, firstIdx:first, lastIdx:last, overflow,
-        start: first!=null ? days[first].date : null,
-        finish: last!=null ? days[last].date : null };
+      if(!eligible.length) continue;
+
+      // share the day evenly; whatever a finishing job doesn't need flows to the rest
+      let pool = day.cap;
+      let actives = eligible;
+      while(pool > 1e-6 && actives.length){
+        const share = pool / actives.length;
+        let used = 0;
+        const still = [];
+        for(const x of actives){
+          const take = Math.min(share, x.rem);
+          if(take > 1e-9){
+            x.rem -= take; used += take;
+            if(x.first === null) x.first = i;
+            x.last = i;
+          }
+          if(x.rem > 1e-6) still.push(x);
+        }
+        pool -= used;
+        actives = still;
+        if(used <= 1e-9) break;
+      }
+      day.committed = day.cap - pool;
+    }
+
+    const result = st.map(x => {
+      const overflow = x.rem > 1e-6;
+      return {
+        p: x.p,
+        firstIdx: x.first,
+        lastIdx: overflow ? days.length-1 : x.last,
+        overflow,
+        start:  x.first != null ? days[x.first].date : null,
+        finish: overflow ? days[days.length-1].date : (x.last != null ? days[x.last].date : null)
+      };
     });
     return { base, days, result };
   }
+
   function statusFor(r){
     if(!(r.p.value>0)) return {cls:'', txt:'set a value →'};
     const want = parseYMD(r.p.requested);
@@ -1118,6 +1165,7 @@
         if(typeof d.monthlyOutput==='number') cfg.capacity = d.monthlyOutput;
         if(typeof d.bufferPct==='number')     cfg.buffer   = d.bufferPct;
         if(typeof d.workDays==='number')      cfg.workDays = d.workDays;
+        if(typeof d.wip==='number')           cfg.wip      = d.wip;
       }
     }catch(e){}
     const fin = {};
@@ -1140,7 +1188,7 @@
   }
   const saveValue  = (id,val) => setDoc(doc(db,'projectFinance',id), {value:val}, {merge:true});
   const saveConfig = () => setDoc(doc(db,'config','capacity'),
-    {monthlyOutput:cfg.capacity, bufferPct:cfg.buffer, workDays:cfg.workDays}, {merge:true});
+    {monthlyOutput:cfg.capacity, bufferPct:cfg.buffer, workDays:cfg.workDays, wip:cfg.wip}, {merge:true});
 
   /* ── render ─────────────────────────────────────────────────────────── */
   const $ = id => document.getElementById(id);
@@ -1149,6 +1197,7 @@
     $('lc-cap').value = cfg.capacity;
     $('lc-buf').value = cfg.buffer;
     $('lc-wd').value  = cfg.workDays;
+    $('lc-wip').value = cfg.wip;
     $('lc-daily').textContent  = num(dailySellable())+'/day';
     $('lc-perday').textContent = num(cfg.capacity/(cfg.workDays||26))+'/day';
     const alloc = allocate();
@@ -1278,6 +1327,7 @@
   $('lc-cap').addEventListener('input', function(){ cfg.capacity=Math.max(0,+this.value||0); render(); });
   $('lc-buf').addEventListener('input', function(){ cfg.buffer=Math.min(60,Math.max(0,+this.value||0)); render(); });
   $('lc-wd').addEventListener('input',  function(){ cfg.workDays=Math.min(31,Math.max(1,+this.value||26)); render(); });
+  $('lc-wip').addEventListener('input', function(){ cfg.wip=Math.min(40,Math.max(1,+this.value||6)); render(); });
   $('lc-save').addEventListener('click', function(){
     const b=this; b.disabled=true; b.textContent='Saving…';
     saveConfig().then(()=>{b.textContent='Saved ✓';}).catch(()=>{b.textContent='Save failed';})

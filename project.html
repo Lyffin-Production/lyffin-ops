@@ -716,6 +716,10 @@ ${(function(){
             <input type="text" id="e-order" value="${esc(project.orderNo||'')}">
           </div>
           <div class="form-field">
+            <label>Order date <span style="font-size:11px;font-weight:400;color:var(--ink-3)">(production is scheduled from this date)</span></label>
+            <input type="date" id="e-order-date" value="${project.orderDate||''}">
+          </div>
+          <div class="form-field">
             <label>Location</label>
             <input type="text" id="e-location" value="${esc(project.location||'')}" placeholder="e.g. Kozhikode">
           </div>
@@ -778,9 +782,11 @@ ${(function(){
   window.saveEdit = async function() {
     try {
       const oldHandover = project.handoverDate || '';
+      const oldOrderDate = project.orderDate || '';
       const updates = {
         projectName:    document.getElementById('e-name').value.trim(),
         orderNo:        document.getElementById('e-order').value.trim(),
+        orderDate:      document.getElementById('e-order-date').value,
         location:       document.getElementById('e-location').value.trim(),
         address:        document.getElementById('e-address').value.trim(),
         coordinates:    document.getElementById('e-coords').value.trim(),
@@ -804,6 +810,11 @@ ${(function(){
           changedBy: userName,
           changedAt: serverTimestamp()
         });
+      }
+      // Log order date change (drives the production schedule)
+      if (updates.orderDate !== oldOrderDate) {
+        const uName = document.getElementById('user-name').textContent;
+        await logProjectActivity('Order date changed from ' + (oldOrderDate || 'none') + ' to ' + (updates.orderDate || 'none') + ' by ' + uName);
       }
       // Log general edit activity
       await logProjectActivity((document.getElementById('user-name').textContent) + ' updated project details');
