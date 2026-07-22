@@ -498,7 +498,7 @@ function renderRow(projectId, item) {
 
   return '<tr>' +
     '<td>' +
-      '<div class="item-name">' + esc(item.name||'Unnamed') + '</div>' +
+      '<div class="item-name">' + (item.productNo ? '<span style="color:var(--ink-3);font-weight:400">#' + esc(item.productNo) + '</span> ' : '') + esc(item.name||'Unnamed') + '</div>' +
       '<div class="item-meta">Qty: ' + (item.qty||1) + (item.area ? ' · ' + esc(item.area) : '') + (item.dimensions ? ' · ' + esc(item.dimensions) : '') + '</div>' +
       (item.details ? '<div class="item-meta" style="font-style:italic">' + esc(item.details) + '</div>' : '') +
       ((item.finishes && item.finishes.length) ? '<div class="item-meta">Finish: ' + item.finishes.filter(Boolean).map(esc).join(', ') + '</div>' : '') +
