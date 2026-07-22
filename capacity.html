@@ -741,6 +741,9 @@
   .lc-inp{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;font-family:var(--font-sans);background:var(--white);color:var(--ink)}
   .lc-inp:focus{outline:2px solid var(--gold-lt);border-color:var(--gold)}
   .lc-hint{font-size:11px;color:var(--ink-3);margin-top:4px;line-height:1.4}
+  .lc-check{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-2);margin-top:7px;cursor:pointer}
+  .lc-check input{width:15px;height:15px;accent-color:var(--gold);cursor:pointer}
+  .lc-warn{color:#c0392b;font-weight:600}
   .lc-btn{margin-top:12px;padding:8px 14px;border:1px solid var(--ink);border-radius:var(--radius);background:var(--ink);color:#fff;cursor:pointer;font-size:13px;font-family:var(--font-sans)}
   .lc-btn:disabled{opacity:.6;cursor:default}
   .lc-tot{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px dashed var(--border);font-size:12px;color:var(--ink-2)}
@@ -883,7 +886,8 @@
 
           <label class="lc-lab">Working days per month</label>
           <input id="lc-wd" class="lc-inp" type="number" min="1" max="31" value="26">
-          <div class="lc-hint">Sundays are treated as the weekly off in the calendar.</div>
+          <label class="lc-check"><input id="lc-sun" type="checkbox" checked> Sunday is the weekly off</label>
+          <div class="lc-hint">Actually delivers <b id="lc-eff">—</b> per month. <span id="lc-effnote"></span></div>
 
           <label class="lc-lab">Finish this many days before handover</label>
           <input id="lc-lead" class="lc-inp" type="number" min="0" max="60" value="5">
@@ -1028,7 +1032,7 @@
   const DONE    = ['Delivered','Completed','Complaints'];
   const MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-  let cfg = { capacity: 40, buffer: 18, workDays: 26, wip: 6, leadDays: 5, minDays: 3 };
+  let cfg = { capacity: 40, buffer: 18, workDays: 26, wip: 6, leadDays: 5, minDays: 3, sundayOff: true };
   let sortMode = 'edd';
   let projects = [];
   let quoteVal = null, quoteReq = null, quoteOrder = null;
@@ -1050,7 +1054,7 @@
   function fmtDate(d){ return d ? d.getDate()+' '+MN[d.getMonth()]+' '+d.getFullYear() : '—'; }
   function fmtShort(s){ const d=parseYMD(s); return d ? d.getDate()+' '+MN[d.getMonth()] : '—'; }
   function todayStr(){ const t=today(); return t.getFullYear()+'-'+pad(t.getMonth()+1)+'-'+pad(t.getDate()); }
-  function isWorkDay(d){ return d.getDay() !== 0; }   // Sunday off
+  function isWorkDay(d){ return cfg.sundayOff ? d.getDay() !== 0 : true; }
 
   /* ── engine (day-wise) ─────────────────────────────────────────────── */
   function dailySellable(){
@@ -1058,12 +1062,10 @@
     const s = (cfg.capacity / wd) * (1 - cfg.buffer/100);
     return s > 0 ? s : 0.0001;
   }
-  function timelineBase(){
-    let base = today();
-    projects.forEach(p => { const od = parseYMD(p.orderDate); if(od && od < base) base = od; });
-    const floor = addDays(today(), -365);
-    return base < floor ? floor : base;
-  }
+  // The timeline starts TODAY. Work that hasn't happened yet cannot be scheduled
+  // into the past, so an old order that was never started is planned from today
+  // forward — which is what makes it show as genuinely late instead of "done".
+  function timelineBase(){ return today(); }
   function buildDays(base){
     const cap = dailySellable(), out = new Array(HORIZON);
     for(let i=0;i<HORIZON;i++){
@@ -1209,6 +1211,14 @@
     return {cls:'over', txt:'LATE by '+(-vsWant)+' d', late:true, risk:true};
   }
 
+  // What the settings really produce in a month, once non-working days are removed.
+  function effectiveMonthly(){
+    const t = today();
+    let work = 0;
+    for(let i=0;i<30;i++){ if(isWorkDay(addDays(t,i))) work++; }
+    const perMonthWorkDays = work * (30.44/30);          // average month length
+    return (cfg.capacity / (cfg.workDays||26)) * perMonthWorkDays;
+  }
   function num(v){ if(v==null||isNaN(v)) return '—'; v=Math.round(v*10)/10; return String(Number.isInteger(v)?v:v.toFixed(1)); }
   function esc(s){ return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 
@@ -1224,6 +1234,7 @@
         if(typeof d.wip==='number')           cfg.wip      = d.wip;
         if(typeof d.leadDays==='number')      cfg.leadDays = d.leadDays;
         if(typeof d.minDays==='number')       cfg.minDays  = d.minDays;
+        if(typeof d.sundayOff==='boolean')    cfg.sundayOff = d.sundayOff;
       }
     }catch(e){}
     const fin = {};
@@ -1249,7 +1260,7 @@
   const saveEarly = (id,flag) => setDoc(doc(db,'projectFinance',id), {early:!!flag}, {merge:true});
   const saveConfig = () => setDoc(doc(db,'config','capacity'),
     {monthlyOutput:cfg.capacity, bufferPct:cfg.buffer, workDays:cfg.workDays, wip:cfg.wip,
-     leadDays:cfg.leadDays, minDays:cfg.minDays}, {merge:true});
+     leadDays:cfg.leadDays, minDays:cfg.minDays, sundayOff:cfg.sundayOff}, {merge:true});
 
   /* ── render ─────────────────────────────────────────────────────────── */
   const $ = id => document.getElementById(id);
@@ -1263,6 +1274,14 @@
     $('lc-min').value  = cfg.minDays;
     $('lc-daily').textContent  = num(dailySellable())+'/day';
     $('lc-perday').textContent = num(cfg.capacity/(cfg.workDays||26))+'/day';
+    $('lc-sun').checked = cfg.sundayOff;
+    const eff = effectiveMonthly(), drift = Math.abs(eff - cfg.capacity) / (cfg.capacity||1);
+    const effEl = $('lc-eff');
+    effEl.textContent = num(eff);
+    effEl.className = drift > 0.05 ? 'lc-warn' : '';
+    $('lc-effnote').textContent = drift > 0.05
+      ? 'Doesn\'t match your ' + num(cfg.capacity) + ' target — set working days to the number you actually work.'
+      : 'Matches your monthly target.';
     const alloc = allocate();
     renderCalendar(alloc);
     renderBook(alloc);
@@ -1397,6 +1416,7 @@
   $('lc-wip').addEventListener('input', function(){ cfg.wip=Math.min(40,Math.max(1,+this.value||6)); render(); });
   $('lc-lead').addEventListener('input', function(){ cfg.leadDays=Math.min(60,Math.max(0,+this.value||0)); render(); });
   $('lc-min').addEventListener('input',  function(){ cfg.minDays=Math.min(60,Math.max(1,+this.value||1)); render(); });
+  $('lc-sun').addEventListener('change', function(){ cfg.sundayOff=this.checked; render(); });
   $('lc-save').addEventListener('click', function(){
     const b=this; b.disabled=true; b.textContent='Saving…';
     saveConfig().then(()=>{b.textContent='Saved ✓';}).catch(()=>{b.textContent='Save failed';})

@@ -772,7 +772,7 @@
 
   function populateProjectDropdowns() {
     const opts = '<option value="">Select project…</option>' +
-      projects.map(p => `<option value="${p.id}">${esc(p.projectName || p.id)}</option>`).join('');
+      projects.map(p => `<option value="${p.id}">${p.orderNo ? '#' + esc(p.orderNo) + ' — ' : ''}${esc(p.projectName || p.id)}</option>`).join('');
     document.getElementById('c-project').innerHTML = opts;
     document.getElementById('q-project').innerHTML = opts;
   }

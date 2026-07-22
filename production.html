@@ -331,7 +331,7 @@ function loadProduction(role, userName, uid) {
     if (bulkSel) {
       bulkSel.innerHTML = '<option value="">Select project…</option>' +
         projects.filter(p => !['Delivered','Completed'].includes(p.status))
-          .map(p => '<option value="' + p.id + '">' + esc(p.projectName||p.id) + '</option>').join('');
+          .map(p => '<option value="' + p.id + '">' + (p.orderNo ? '#' + esc(p.orderNo) + ' — ' : '') + esc(p.projectName||p.id) + '</option>').join('');
     }
     for (let i = 0; i < projects.length; i++) {
       const proj = projects[i];
