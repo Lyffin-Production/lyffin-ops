@@ -100,7 +100,7 @@ body{font-family:var(--font-sans);background:var(--surface);color:var(--ink);min
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js';
-import { getFirestore, doc, getDoc, collection, getDocs } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
+import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyC0aoUyBCHn63-WkJnPFbDJLF0x1GFMyxU",
@@ -125,18 +125,27 @@ if (!projectId) {
 
 async function loadProject() {
   try {
-    const [projSnap, itemsSnap] = await Promise.all([
-      getDoc(doc(db, 'projects', projectId)),
-      getDocs(collection(db, 'projects', projectId, 'items'))
-    ]);
+    // This page never touches the real projects/items collections — it reads
+    // only publicShares/{id}, a mirror containing exclusively the fields a
+    // client is meant to see. See project.html / production.html for where
+    // that mirror gets written (syncPublicShare).
+    const shareSnap = await getDoc(doc(db, 'publicShares', projectId));
 
-    if (!projSnap.exists()) {
-      document.getElementById('main').innerHTML = '<div class="error-state"><h2>Project not found</h2><p>This project may have been removed or the link is incorrect.</p></div>';
+    if (!shareSnap.exists()) {
+      document.getElementById('main').innerHTML = '<div class="error-state"><h2>Project not found</h2><p>This project may have been removed, the link is incorrect, or its status hasn\'t been published yet.</p></div>';
       return;
     }
 
-    const project = { id: projSnap.id, ...projSnap.data() };
-    const items = itemsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const pub = shareSnap.data();
+    const project = {
+      id: projectId,
+      projectName: pub.projectName || '',
+      location: pub.location || '',
+      orderNo: pub.orderNo || '',
+      status: pub.status || 'Not Started',
+      handoverDate: pub.handoverDate || ''
+    };
+    const items = pub.items || [];
 
     document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short'});
     document.title = (project.projectName || 'Project') + ' — Lyffin Status';
@@ -167,14 +176,14 @@ function renderProject(project, items) {
   function itemBadgeClass(overallStatus) {
     const s = overallStatus || 'Structure';
     if (s === 'Ready') return 's-ready';
-    return 's-' + s.replace(' (In Progress)','').toLowerCase();
+    return 's-' + s.replace(' (In Progress)','').toLowerCase().replace(/[^a-z0-9]+/g,'-');
   }
 
   const totalItems = items.length;
   const readyItems = items.filter(i => i.overallStatus === 'Ready').length;
   const pct = totalItems ? Math.round(readyItems / totalItems * 100) : 0;
 
-  const statusClass = 's-' + (project.status || 'not-started').toLowerCase().replace(/\s+/g,'-').replace(/'/g,'');
+  const statusClass = 's-' + (project.status || 'not-started').toLowerCase().replace(/[^a-z0-9]+/g,'-');
 
   // Stage completion summary (across all items)
   const stageSummary = STAGES.map(stage => {
@@ -289,7 +298,7 @@ function formatDate(d) {
 }
 
 function esc(s) {
-  return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 </script>
 </body>

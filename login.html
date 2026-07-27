@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<link rel="manifest" href="/lyffin-ops/manifest.json">
+<link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#1a1a18">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Lyffin Ops">
-<link rel="apple-touch-icon" href="/lyffin-ops/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Lyffin Ops — Sign in</title>
 <style>
@@ -360,7 +360,7 @@
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js';
   import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
-  import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
+  import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
 
   const firebaseConfig = {
     apiKey:            "AIzaSyC0aoUyBCHn63-WkJnPFbDJLF0x1GFMyxU",
@@ -388,14 +388,35 @@
   // If already signed in, redirect
   onAuthStateChanged(auth, async (user) => {
     if (user) {
-      const role = await getUserRole(db, user.uid);
+      const role = await getUserRole(db, user);
       window.location.href = ROLE_PAGES[role] || 'dashboard.html';
     }
   });
 
-  async function getUserRole(db, uid) {
-    const snap = await getDoc(doc(db, 'users', uid));
-    return snap.exists() ? snap.data().role : 'sales';
+  // Looks up the signed-in user's role. If this is their first ever sign-in
+  // (no users/{uid} doc yet), checks for an admin-created invite matching
+  // their verified email and claims it — creating users/{uid} with exactly
+  // the name/role the admin assigned. This is what makes an invited team
+  // member's role actually take effect on their first login, instead of
+  // silently falling back to 'sales'. Firestore rules only allow this
+  // self-create when the written role/name match the invite exactly, so a
+  // user can never grant themselves a different role this way.
+  async function getUserRole(db, user) {
+    const snap = await getDoc(doc(db, 'users', user.uid));
+    if (snap.exists()) return snap.data().role;
+
+    if (user.email) {
+      try {
+        const inviteSnap = await getDoc(doc(db, 'pendingInvites', user.email));
+        if (inviteSnap.exists()) {
+          const invite = inviteSnap.data();
+          const userDoc = { name: invite.name || '', email: user.email, role: invite.role || 'sales' };
+          await setDoc(doc(db, 'users', user.uid), userDoc);
+          return userDoc.role;
+        }
+      } catch (e) { /* fall through to default below */ }
+    }
+    return 'sales';
   }
 
   window.handleSignIn = async function () {
@@ -415,7 +436,7 @@
 
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
-      const role = await getUserRole(db, cred.user.uid);
+      const role = await getUserRole(db, cred.user);
       window.location.href = ROLE_PAGES[role] || 'dashboard.html';
     } catch (e) {
       const messages = {
@@ -445,7 +466,7 @@
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/lyffin-ops/sw.js');
+  navigator.serviceWorker.register('/sw.js');
 }
 </script>
 </body>

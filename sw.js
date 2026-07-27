@@ -1,17 +1,17 @@
-const CACHE = 'lyffin-ops-v1785148406';
+const CACHE = 'lyffin-ops-v1785165307';
 const FILES = [
-  '/lyffin-ops/login.html',
-  '/lyffin-ops/dashboard.html',
-  '/lyffin-ops/production.html',
-  '/lyffin-ops/qc.html',
-  '/lyffin-ops/admin.html',
-  '/lyffin-ops/capacity.html',
-  '/lyffin-ops/project.html',
-  '/lyffin-ops/account.html',
-  '/lyffin-ops/share.html',
-  '/lyffin-ops/manifest.json',
-  '/lyffin-ops/icon-192.png',
-  '/lyffin-ops/icon-512.png'
+  '/login.html',
+  '/dashboard.html',
+  '/production.html',
+  '/qc.html',
+  '/admin.html',
+  '/capacity.html',
+  '/project.html',
+  '/account.html',
+  '/share.html',
+  '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png'
 ];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))); self.clients.claim(); });

@@ -2,21 +2,21 @@
   "name": "Lyffin Ops",
   "short_name": "Lyffin Ops",
   "description": "Lyffin Operations Platform",
-  "start_url": "/lyffin-ops/login.html",
-  "scope": "/lyffin-ops/",
+  "start_url": "/login.html",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#f7f6f2",
   "theme_color": "#1a1a18",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/lyffin-ops/icon-192.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/lyffin-ops/icon-512.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

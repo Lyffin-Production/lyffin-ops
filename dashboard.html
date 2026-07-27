@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<link rel="manifest" href="/lyffin-ops/manifest.json">
+<link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#1a1a18">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Lyffin Ops">
-<link rel="apple-touch-icon" href="/lyffin-ops/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Lyffin Ops — Projects</title>
 <style>
@@ -980,7 +980,7 @@
   import { getAuth, onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
   import {
     getFirestore, collection, addDoc, onSnapshot, query,
-    orderBy, doc, getDoc, getDocs, serverTimestamp
+    orderBy, doc, getDoc, getDocs, serverTimestamp, setDoc
   } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
 
   const firebaseConfig = {
@@ -1003,13 +1003,33 @@
   let currentUserUID = '';
   let allProjects = [];
 
+  // Looks up the signed-in user's profile doc, self-provisioning from a
+  // matching admin-created invite on first sign-in (see login.html for the
+  // full explanation). Firestore rules only allow this self-create when the
+  // written role/name match the invite exactly.
+  async function resolveUserDoc(db, user) {
+    const snap = await getDoc(doc(db, 'users', user.uid));
+    if (snap.exists()) return snap.data();
+    if (user.email) {
+      try {
+        const inviteSnap = await getDoc(doc(db, 'pendingInvites', user.email));
+        if (inviteSnap.exists()) {
+          const invite = inviteSnap.data();
+          const userDoc = { name: invite.name || '', email: user.email, role: invite.role || 'sales' };
+          await setDoc(doc(db, 'users', user.uid), userDoc);
+          return userDoc;
+        }
+      } catch (e) { /* fall through to default */ }
+    }
+    return {};
+  }
+
   // ── AUTH GUARD ────────────────────────────────────────────────────────────
   onAuthStateChanged(auth, async (user) => {
     if (!user) { window.location.href = 'login.html'; return; }
 
     currentUser = user;
-    const snap = await getDoc(doc(db, 'users', user.uid));
-    const data = snap.exists() ? snap.data() : {};
+    const data = await resolveUserDoc(db, user);
     currentRole = data.role || 'sales';
     currentUserUID = user.uid;
     currentUserEmail = user.email;
@@ -1145,21 +1165,21 @@
     }
 
     tbody.innerHTML = projects.map(p => {
-      const statusClass = 's-' + (p.status || 'not-started').toLowerCase().replace(/\s+/g,'-');
+      const statusClass = 's-' + (p.status || 'not-started').toLowerCase().replace(/[^a-z0-9]+/g,'-');
       const initials = (p.assignee || '?').substring(0,2).toUpperCase();
       const handover = p.handoverDate ? formatDate(p.handoverDate) : '—';
       const fabricClass = p.fabricStatus === 'Selected' || p.fabricStatus === 'Fabric Delivered'
         ? 'fabric-ok' : p.fabricStatus === 'Fabric List Shared' ? 'fabric-shared' : 'fabric-pending';
 
-      return `<tr onclick="openProject('${p.id}')">
-        <td class="td-order col-order">${p.orderNo || '—'}</td>
-        <td class="td-project">${p.projectName || '—'}</td>
-        <td class="td-location">${p.location || '—'}</td>
-        <td><div class="td-assignee"><div class="assignee-dot">${initials}</div>${p.assignee || '—'}</div></td>
-        <td><span class="status-badge ${statusClass}">${p.status || 'Not started'}</span></td>
+      return `<tr onclick="openProject('${esc(p.id)}')">
+        <td class="td-order col-order">${esc(p.orderNo) || '—'}</td>
+        <td class="td-project">${esc(p.projectName) || '—'}</td>
+        <td class="td-location">${esc(p.location) || '—'}</td>
+        <td><div class="td-assignee"><div class="assignee-dot">${esc(initials)}</div>${esc(p.assignee) || '—'}</div></td>
+        <td><span class="status-badge ${statusClass}">${esc(p.status) || 'Not started'}</span></td>
         <td style="font-size:13px;color:var(--ink-3)">${p.itemCount ? p.itemCount + ' items' : '—'}</td>
         <td class="td-date col-handover">${handover}</td>
-        <td class="td-fabric ${fabricClass}">${p.fabricStatus || 'Not selected'}</td>
+        <td class="td-fabric ${fabricClass}">${esc(p.fabricStatus) || 'Not selected'}</td>
       </tr>`;
     }).join('');
   }
@@ -1392,7 +1412,7 @@
     });
   }
 
-  function esc(s) { return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function esc(s) { return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
   window.signOut = async function() {
     await fbSignOut(auth);
@@ -1415,7 +1435,7 @@
 </script>
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/lyffin-ops/sw.js');
+  navigator.serviceWorker.register('/sw.js');
 }
 </script>
 

@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<link rel="manifest" href="/lyffin-ops/manifest.json">
+<link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#1a1a18">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Lyffin Ops">
-<link rel="apple-touch-icon" href="/lyffin-ops/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Lyffin Ops — Capacity</title>
 <style>
@@ -1449,11 +1449,31 @@
     saveValue(id,val).catch(err=>console.error('save value failed',err));
   });
 
+  // Looks up the signed-in user's profile doc, self-provisioning from a
+  // matching admin-created invite on first sign-in (see login.html for the
+  // full explanation). Firestore rules only allow this self-create when the
+  // written role/name match the invite exactly.
+  async function resolveUserDoc(db, user) {
+    const snap = await getDoc(doc(db,'users',user.uid));
+    if (snap.exists()) return snap.data();
+    if (user.email) {
+      try {
+        const inviteSnap = await getDoc(doc(db,'pendingInvites',user.email));
+        if (inviteSnap.exists()) {
+          const invite = inviteSnap.data();
+          const userDoc = { name: invite.name || '', email: user.email, role: invite.role || 'sales' };
+          await setDoc(doc(db,'users',user.uid), userDoc);
+          return userDoc;
+        }
+      } catch (e) { /* fall through to default */ }
+    }
+    return {};
+  }
+
   /* ── auth guard (admin only) ───────────────────────────────────────── */
   onAuthStateChanged(auth, async (user) => {
     if(!user){ window.location.href='login.html'; return; }
-    const snap = await getDoc(doc(db,'users',user.uid));
-    const data = snap.exists() ? snap.data() : {};
+    const data = await resolveUserDoc(db, user);
     const role = data.role || 'sales';
     if(role !== 'admin'){ window.location.href='dashboard.html'; return; }
     const name = data.name || user.email.split('@')[0];

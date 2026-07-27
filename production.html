@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<link rel="manifest" href="/lyffin-ops/manifest.json">
+<link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#1a1a18">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Lyffin Ops">
-<link rel="apple-touch-icon" href="/lyffin-ops/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Lyffin Ops — Production</title>
 <style>
@@ -260,7 +260,7 @@ body{font-family:var(--font-sans);background:var(--surface);color:var(--ink);min
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js';
 import { getAuth, onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
-import { getFirestore, collection, onSnapshot, query, doc, getDoc, updateDoc, getDocs, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
+import { getFirestore, collection, onSnapshot, query, doc, getDoc, updateDoc, getDocs, addDoc, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyC0aoUyBCHn63-WkJnPFbDJLF0x1GFMyxU",
@@ -289,10 +289,30 @@ let _remarkProjectId = null;
 let _remarkItemId = null;
 let _remarkItemName = '';
 
+// Looks up the signed-in user's profile doc, self-provisioning from a
+// matching admin-created invite on first sign-in (see login.html for the
+// full explanation). Firestore rules only allow this self-create when the
+// written role/name match the invite exactly.
+async function resolveUserDoc(db, user) {
+  const snap = await getDoc(doc(db, 'users', user.uid));
+  if (snap.exists()) return snap.data();
+  if (user.email) {
+    try {
+      const inviteSnap = await getDoc(doc(db, 'pendingInvites', user.email));
+      if (inviteSnap.exists()) {
+        const invite = inviteSnap.data();
+        const userDoc = { name: invite.name || '', email: user.email, role: invite.role || 'floor' };
+        await setDoc(doc(db, 'users', user.uid), userDoc);
+        return userDoc;
+      }
+    } catch (e) { /* fall through to default */ }
+  }
+  return {};
+}
+
 onAuthStateChanged(auth, async function(user) {
   if (!user) { window.location.href = 'login.html'; return; }
-  const snap = await getDoc(doc(db, 'users', user.uid));
-  const data = snap.exists() ? snap.data() : {};
+  const data = await resolveUserDoc(db, user);
   const name = data.name || user.email.split('@')[0];
   currentRole = data.role || 'floor';
   currentUserName = name;
@@ -513,6 +533,36 @@ function renderRow(projectId, item) {
 
 // ── STAGE ACTIONS ──────────────────────────────────────────────────────────
 
+// Mirrors only the safe, customer-facing fields into a public collection
+// (publicShares) that the no-login share page reads from — the real
+// projects/items collections are never exposed to that page. Called after
+// any write that could change what a client sees.
+async function syncPublicShare(projectId) {
+  try {
+    const pSnap = await getDoc(doc(db, 'projects', projectId));
+    if (!pSnap.exists()) return;
+    const p = pSnap.data();
+    const itemsSnap = await getDocs(collection(db, 'projects', projectId, 'items'));
+    const items = itemsSnap.docs.map(function(d) {
+      const it = d.data();
+      return {
+        name: it.name || '', productNo: it.productNo || '', qty: it.qty || 1,
+        area: it.area || '', dimensions: it.dimensions || '',
+        overallStatus: it.overallStatus || 'Structure',
+        carpentryStatus: it.carpentryStatus || 'pending',
+        polishStatus: it.polishStatus || 'pending',
+        upholsteryStatus: it.upholsteryStatus || 'pending',
+        packingStatus: it.packingStatus || 'pending'
+      };
+    });
+    await setDoc(doc(db, 'publicShares', projectId), {
+      projectName: p.projectName || '', location: p.location || '', orderNo: p.orderNo || '',
+      status: p.status || 'Not Started', handoverDate: p.handoverDate || '',
+      items: items, updatedAt: serverTimestamp()
+    });
+  } catch (e) { console.error('publicShare sync failed', e); }
+}
+
 window.tap = async function(projectId, itemId, stage, btn) {
   if (btn.disabled) return;
   btn.disabled = true;
@@ -573,6 +623,7 @@ window.tap = async function(projectId, itemId, stage, btn) {
     if (updates.overallStatus === 'Ready') updates[stage + 'Status'] = 'done'; // if all done, commit directly
 
     await updateDoc(itemRef, updates);
+    await syncPublicShare(projectId);
 
     // Log activity
     await logActivity(projectId, next === 'pending_approval'
@@ -597,6 +648,7 @@ window.tap = async function(projectId, itemId, stage, btn) {
     });
     if (allReady) {
       await updateDoc(doc(db, 'projects', projectId), {status:'Packing'});
+      await syncPublicShare(projectId);
       await logActivity(projectId, 'All items ready — project moved to Packing');
     }
   } catch(e) {
@@ -622,6 +674,7 @@ window.startStage = async function(projectId, itemId, stage, btn) {
     // Overall status: label + ' (In Progress)'
     updates.overallStatus = LABELS[stage] + ' (In Progress)';
     await updateDoc(itemRef, updates);
+    await syncPublicShare(projectId);
     await logActivity(projectId, currentUserName + ' started ' + LABELS[stage] + ' on ' + (item.name||'item'));
     showToast(LABELS[stage] + ' started');
   } catch(e) { showToast('Error: ' + e.message); }
@@ -648,6 +701,7 @@ window.approveStage = async function(projectId, itemId, stage, btn) {
     const firstStarted2 = !firstPending && valid.find(s => (sim[s + 'Status'] || 'pending') === 'started');
     updates.overallStatus = firstStarted2 ? LABELS[firstStarted2] + ' (In Progress)' : (firstPending ? LABELS[firstPending] : 'Ready');
     await updateDoc(itemRef, updates);
+    await syncPublicShare(projectId);
     await logActivity(projectId, currentUserName + ' approved ' + LABELS[stage] + ' for ' + (item.name||'item'));
     showToast(LABELS[stage] + ' approved');
   } catch(e) { showToast('Error: ' + e.message); }
@@ -672,6 +726,7 @@ window.undoNA = async function(projectId, itemId, stage, btn) {
     const firstStarted3 = !firstPending && valid.find(s => (sim[s + 'Status'] || 'pending') === 'started');
     updates.overallStatus = firstStarted3 ? LABELS[firstStarted3] + ' (In Progress)' : (firstPending ? LABELS[firstPending] : 'Ready');
     await updateDoc(itemRef, updates);
+    await syncPublicShare(projectId);
     showToast(LABELS[stage] + ' restored to pending');
   } catch(e) { showToast('Error: ' + e.message); }
   finally { btn.disabled = false; }
@@ -696,6 +751,7 @@ window.markNA = async function(projectId, itemId, stage, btn) {
     const firstPending = valid.find(s => (sim[s + 'Status'] || 'pending') === 'pending');
     updates.overallStatus = firstPending ? LABELS[firstPending] : 'Ready';
     await updateDoc(itemRef, updates);
+    await syncPublicShare(projectId);
     showToast(stageLabel + ' marked as N/A');
   } catch(e) { showToast('Error: ' + e.message); }
   finally { btn.disabled = false; }
@@ -743,6 +799,7 @@ window.bulkUpdateStatus = async function() {
   if (!confirm('Change status of "' + projName + '" to ' + newStatus + '?')) return;
   try {
     await updateDoc(doc(db, 'projects', projectId), { status: newStatus, updatedAt: serverTimestamp() });
+    await syncPublicShare(projectId);
     await logActivity(projectId, currentUserName + ' bulk-updated project status to ' + newStatus);
     showToast(projName + ' → ' + newStatus);
   } catch(e) { showToast('Error: ' + e.message); }
@@ -757,7 +814,7 @@ async function logActivity(projectId, message) {
       uid: currentUserUID,
       at: serverTimestamp()
     });
-  } catch(e) { /* non-critical */ }
+  } catch(e) { console.error('Activity log write failed:', e.message); }
 }
 
 window.toggleProject = function(pid) {
@@ -774,7 +831,7 @@ window.filterProjects = function() { render(); };
 window.signOut = async function() { await fbSignOut(auth); window.location.href = 'login.html'; };
 
 function esc(s) {
-  return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 function showToast(msg) {
   const t = document.getElementById('toast');
@@ -785,7 +842,7 @@ function showToast(msg) {
 </script>
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/lyffin-ops/sw.js');
+  navigator.serviceWorker.register('/sw.js');
 }
 </script>
 <div class="bottom-nav">

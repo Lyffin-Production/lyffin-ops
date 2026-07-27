@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<link rel="manifest" href="/lyffin-ops/manifest.json">
+<link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#1a1a18">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Lyffin Ops">
-<link rel="apple-touch-icon" href="/lyffin-ops/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Lyffin Ops — Admin</title>
 <style>
@@ -487,7 +487,7 @@
   import { getAuth, onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
   import {
     getFirestore, collection, getDocs, onSnapshot,
-    query, orderBy, limit, doc, getDoc, setDoc
+    query, orderBy, limit, doc, getDoc, setDoc, serverTimestamp, deleteDoc
   } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
 
   const firebaseConfig = {
@@ -509,11 +509,33 @@
   document.getElementById('topbar-date').textContent =
     new Date().toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 
+  // Looks up the signed-in user's profile doc. If this is their first ever
+  // sign-in (no users/{uid} doc yet), checks for an admin-created invite
+  // matching their verified email and claims it — creating users/{uid} with
+  // exactly the name/role the admin assigned, instead of silently falling
+  // back to a default role. Firestore rules only allow this self-create when
+  // the written role/name match the invite exactly.
+  async function resolveUserDoc(db, user) {
+    const snap = await getDoc(doc(db, 'users', user.uid));
+    if (snap.exists()) return snap.data();
+    if (user.email) {
+      try {
+        const inviteSnap = await getDoc(doc(db, 'pendingInvites', user.email));
+        if (inviteSnap.exists()) {
+          const invite = inviteSnap.data();
+          const userDoc = { name: invite.name || '', email: user.email, role: invite.role || 'sales' };
+          await setDoc(doc(db, 'users', user.uid), userDoc);
+          return userDoc;
+        }
+      } catch (e) { /* fall through to default */ }
+    }
+    return {};
+  }
+
   // ── AUTH ──────────────────────────────────────────────────────────────────
   onAuthStateChanged(auth, async (user) => {
     if (!user) { window.location.href = 'login.html'; return; }
-    const snap = await getDoc(doc(db, 'users', user.uid));
-    const data = snap.exists() ? snap.data() : {};
+    const data = await resolveUserDoc(db, user);
     if (data.role !== 'admin') { window.location.href = 'dashboard.html'; return; }
     const name = data.name || user.email.split('@')[0];
     document.getElementById('user-name').textContent = name;
@@ -767,7 +789,7 @@
             '<span style="font-size:11px;color:var(--ink-3);margin-left:8px">' + esc(p.assignee||'') + '</span>' +
           '</div>' +
           '<div style="display:flex;align-items:center;gap:12px">' +
-            '<span style="font-size:11px;font-weight:500;padding:2px 8px;border-radius:10px;background:' + color + '20;color:' + color + '">' + (p.status||'Not Started') + '</span>' +
+            '<span style="font-size:11px;font-weight:500;padding:2px 8px;border-radius:10px;background:' + color + '20;color:' + color + '">' + esc(p.status||'Not Started') + '</span>' +
             (daysLeft !== null ? '<span style="font-size:11px;' + urgency + '">' + (daysLeft < 0 ? Math.abs(daysLeft) + 'd overdue' : daysLeft + 'd left') + '</span>' : '') +
           '</div>' +
         '</div>' +
@@ -849,18 +871,33 @@
     const { getDocs, collection: col } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
     const snap = await getDocs(col(db, 'users'));
     const users = snap.docs.map(d => Object.assign({id:d.id}, d.data()));
+    const invSnap = await getDocs(col(db, 'pendingInvites'));
+    // Skip an invite if that email has already been claimed (users doc exists for it)
+    const claimedEmails = new Set(users.map(u => u.email).filter(Boolean));
+    const invites = invSnap.docs.map(d => Object.assign({id:d.id}, d.data())).filter(inv => !claimedEmails.has(inv.email));
     const el = document.getElementById('team-list');
-    if (!users.length) { el.innerHTML = '<div style="padding:16px 20px;font-size:13px;color:var(--ink-3)">No team members yet</div>'; return; }
+    if (!users.length && !invites.length) { el.innerHTML = '<div style="padding:16px 20px;font-size:13px;color:var(--ink-3)">No team members yet</div>'; return; }
+    const roleColors = {admin:'#b89a6a',sales:'#3b82f6',design:'#8b5cf6',supervisor:'#d97706',floor:'#10b981',qc:'#0ea5e9'};
     el.innerHTML = users.map(u => {
-      const roleColors = {admin:'#b89a6a',sales:'#3b82f6',design:'#8b5cf6',supervisor:'#d97706',floor:'#10b981',qc:'#0ea5e9'};
       const rc = roleColors[u.role] || '#9ca3af';
       return '<div style="display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--surface-2)">' +
-        '<div style="width:32px;height:32px;border-radius:50%;background:' + rc + '20;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:' + rc + ';flex-shrink:0">' + (u.name||'?').substring(0,2).toUpperCase() + '</div>' +
+        '<div style="width:32px;height:32px;border-radius:50%;background:' + rc + '20;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:' + rc + ';flex-shrink:0">' + esc((u.name||'?').substring(0,2).toUpperCase()) + '</div>' +
         '<div style="flex:1">' +
           '<div style="font-size:13px;font-weight:500">' + esc(u.name||'—') + '</div>' +
           '<div style="font-size:11px;color:var(--ink-3)">' + esc(u.email||'') + '</div>' +
         '</div>' +
-        '<span style="font-size:11px;font-weight:500;padding:2px 8px;border-radius:10px;background:' + rc + '15;color:' + rc + ';text-transform:capitalize">' + (u.role||'—') + '</span>' +
+        '<span style="font-size:11px;font-weight:500;padding:2px 8px;border-radius:10px;background:' + rc + '15;color:' + rc + ';text-transform:capitalize">' + esc(u.role||'—') + '</span>' +
+      '</div>';
+    }).join('') + invites.map(inv => {
+      const rc = roleColors[inv.role] || '#9ca3af';
+      return '<div style="display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--surface-2);opacity:.7">' +
+        '<div style="width:32px;height:32px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:var(--ink-3);flex-shrink:0">' + esc((inv.name||'?').substring(0,2).toUpperCase()) + '</div>' +
+        '<div style="flex:1">' +
+          '<div style="font-size:13px;font-weight:500">' + esc(inv.name||'—') + '</div>' +
+          '<div style="font-size:11px;color:var(--ink-3)">' + esc(inv.email||'') + ' · not signed in yet</div>' +
+        '</div>' +
+        '<span style="font-size:11px;font-weight:500;padding:2px 8px;border-radius:10px;background:' + rc + '15;color:' + rc + ';text-transform:capitalize">' + esc(inv.role||'—') + ' (pending)</span>' +
+        '<button class="btn btn-ghost" style="font-size:11px;padding:4px 8px" onclick="cancelInvite(\'' + esc(inv.id) + '\')">Cancel</button>' +
       '</div>';
     }).join('');
   }
@@ -871,18 +908,26 @@
   window.closeAddUser = function() {
     document.getElementById('modal-adduser').style.display = 'none';
   };
+  window.cancelInvite = async function(email) {
+    if (!confirm('Cancel this invite? They will not be able to sign in with an assigned role until you invite them again.')) return;
+    try {
+      await deleteDoc(doc(db, 'pendingInvites', email));
+      loadTeam();
+    } catch(e) { alert('Error: ' + e.message); }
+  };
+
   window.saveNewUser = async function() {
     const name  = document.getElementById('au-name').value.trim();
     const email = document.getElementById('au-email').value.trim();
     const role  = document.getElementById('au-role').value;
     if (!name || !email) { alert('Name and email are required'); return; }
     try {
-      const { doc: fDoc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
-      // Use email as temp ID — will be replaced when user logs in with real UID
-      const tempId = 'pending_' + email.replace(/[^a-z0-9]/gi,'_');
-      await setDoc(fDoc(db, 'users', tempId), { name, email, role, pending: true });
+      // Keyed by the invitee's email — when they sign in for the first
+      // time, the app matches this against their verified auth email and
+      // claims it, creating their real users/{uid} doc with this role.
+      await setDoc(doc(db, 'pendingInvites', email), { name, email, role, createdAt: serverTimestamp() });
       closeAddUser();
-      alert('Member saved. Now create their account in Firebase Authentication with email: ' + email);
+      alert('Invite saved. Now create their account in Firebase Authentication with email: ' + email + '\n\nTheir assigned role (' + role + ') will apply automatically the first time they sign in.');
       loadTeam();
     } catch(e) { alert('Error: ' + e.message); }
   };
@@ -960,7 +1005,7 @@
   }
 
   function esc(s) {
-    return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
   window.signOut = async function() {
@@ -970,7 +1015,7 @@
 </script>
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/lyffin-ops/sw.js');
+  navigator.serviceWorker.register('/sw.js');
 }
 </script>
 

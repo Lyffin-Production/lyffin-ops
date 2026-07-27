@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<link rel="manifest" href="/lyffin-ops/manifest.json">
+<link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#1a1a18">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Lyffin Ops">
-<link rel="apple-touch-icon" href="/lyffin-ops/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Lyffin Ops — QC & Complaints</title>
 <style>
@@ -676,7 +676,7 @@
 
   import {
     getFirestore, collection, addDoc, onSnapshot, query,
-    orderBy, doc, getDoc, getDocs, updateDoc, serverTimestamp
+    orderBy, doc, getDoc, getDocs, updateDoc, serverTimestamp, setDoc
   } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
 
   const firebaseConfig = {
@@ -702,12 +702,32 @@
   let currentUpdateId = null;
   let currentUpdateType = null;
 
+  // Looks up the signed-in user's profile doc, self-provisioning from a
+  // matching admin-created invite on first sign-in (see login.html for the
+  // full explanation). Firestore rules only allow this self-create when the
+  // written role/name match the invite exactly.
+  async function resolveUserDoc(db, user) {
+    const snap = await getDoc(doc(db, 'users', user.uid));
+    if (snap.exists()) return snap.data();
+    if (user.email) {
+      try {
+        const inviteSnap = await getDoc(doc(db, 'pendingInvites', user.email));
+        if (inviteSnap.exists()) {
+          const invite = inviteSnap.data();
+          const userDoc = { name: invite.name || '', email: user.email, role: invite.role || 'sales' };
+          await setDoc(doc(db, 'users', user.uid), userDoc);
+          return userDoc;
+        }
+      } catch (e) { /* fall through to default */ }
+    }
+    return {};
+  }
+
   // ── AUTH ──────────────────────────────────────────────────────────────────
   onAuthStateChanged(auth, async (user) => {
     if (!user) { window.location.href = 'login.html'; return; }
     currentUser = user;
-    const snap = await getDoc(doc(db, 'users', user.uid));
-    const data = snap.exists() ? snap.data() : {};
+    const data = await resolveUserDoc(db, user);
     currentRole = data.role || 'sales';
     userData = data;
     window._currentUserName = data.name || user.email.split('@')[0];
@@ -792,7 +812,7 @@
       return;
     }
     tbody.innerHTML = data.map(c => {
-      const statusClass = 'badge-' + (c.status || 'pending').toLowerCase().replace(/\s+/g, '-');
+      const statusClass = 'badge-' + (c.status || 'pending').toLowerCase().replace(/[^a-z0-9]+/g, '-');
       const projName = projects.find(p => p.id === c.projectId)?.projectName || c.projectId || '—';
       return `<tr onclick="openUpdateModal('${c.id}','complaint')">
         <td><strong>${esc(projName)}</strong></td>
@@ -800,7 +820,7 @@
         <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.details)}">${esc(c.details || '—')}</td>
         <td style="font-size:12px;color:var(--ink-3)">${esc(c.rootCause || '—')}</td>
         <td>${esc(c.assignee || '—')}</td>
-        <td><span class="badge ${statusClass}">${c.status || 'Pending'}</span></td>
+        <td><span class="badge ${statusClass}">${esc(c.status || 'Pending')}</span></td>
         <td style="font-size:12px;color:var(--ink-3)">${formatDate(c.complaintDate)}</td>
       </tr>`;
     }).join('');
@@ -814,8 +834,8 @@
       return;
     }
     tbody.innerHTML = data.map(q => {
-      const sevClass = 'sev-' + (q.severity || 'low').toLowerCase();
-      const statusClass = 'badge-' + (q.status || 'pending').toLowerCase().replace(/\s+/g, '-');
+      const sevClass = 'sev-' + (q.severity || 'low').toLowerCase().replace(/[^a-z0-9]+/g,'-');
+      const statusClass = 'badge-' + (q.status || 'pending').toLowerCase().replace(/[^a-z0-9]+/g, '-');
       const projName = projects.find(p => p.id === q.projectId)?.projectName || q.projectId || '—';
       const reopens = q.reopenCount || 0;
       return `<tr onclick="openUpdateModal('${q.id}','qc')">
@@ -824,8 +844,8 @@
         <td><span class="badge badge-pending" style="font-size:11px">${esc(q.stage || '—')}</span></td>
         <td style="font-size:12px;color:var(--ink-3)">${esc(q.category || '—')}</td>
         <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(q.issue)}">${esc(q.issue || '—')}</td>
-        <td class="${sevClass}">${q.severity || '—'}</td>
-        <td><span class="badge ${statusClass}">${q.status || 'Pending'}</span></td>
+        <td class="${sevClass}">${esc(q.severity || '—')}</td>
+        <td><span class="badge ${statusClass}">${esc(q.status || 'Pending')}</span></td>
         <td>${reopens > 0 ? '<span style="color:#c0392b;font-weight:500;font-size:12px">⚠ ' + reopens + 'x</span>' : '<span style="color:var(--ink-3);font-size:12px">—</span>'}</td>
       </tr>`;
     }).join('');
@@ -1014,7 +1034,7 @@
   }
 
   function esc(s) {
-    return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
   function showToast(msg) {
@@ -1026,7 +1046,7 @@
 </script>
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/lyffin-ops/sw.js');
+  navigator.serviceWorker.register('/sw.js');
 }
 </script>
 

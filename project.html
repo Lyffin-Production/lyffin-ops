@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<link rel="manifest" href="/lyffin-ops/manifest.json">
+<link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#1a1a18">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Lyffin Ops">
-<link rel="apple-touch-icon" href="/lyffin-ops/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Lyffin Ops — Project</title>
 <style>
@@ -389,7 +389,7 @@
   import { getAuth, onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
   import {
     getFirestore, doc, getDoc, updateDoc, deleteDoc, collection,
-    getDocs, addDoc, query, where, serverTimestamp, orderBy
+    getDocs, addDoc, query, where, serverTimestamp, orderBy, setDoc
   } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
 
   const firebaseConfig = {
@@ -417,12 +417,32 @@
   let complaints = [];
   let activeTab = 'overview';
 
+  // Looks up the signed-in user's profile doc, self-provisioning from a
+  // matching admin-created invite on first sign-in (see login.html for the
+  // full explanation). Firestore rules only allow this self-create when the
+  // written role/name match the invite exactly.
+  async function resolveUserDoc(db, user) {
+    const snap = await getDoc(doc(db, 'users', user.uid));
+    if (snap.exists()) return snap.data();
+    if (user.email) {
+      try {
+        const inviteSnap = await getDoc(doc(db, 'pendingInvites', user.email));
+        if (inviteSnap.exists()) {
+          const invite = inviteSnap.data();
+          const userDoc = { name: invite.name || '', email: user.email, role: invite.role || 'floor' };
+          await setDoc(doc(db, 'users', user.uid), userDoc);
+          return userDoc;
+        }
+      } catch (e) { /* fall through to default */ }
+    }
+    return {};
+  }
+
   // ── AUTH ──────────────────────────────────────────────────────────────────
   onAuthStateChanged(auth, async (user) => {
     if (!user) { window.location.href = 'login.html'; return; }
     currentUser = user;
-    const snap = await getDoc(doc(db, 'users', user.uid));
-    const data = snap.exists() ? snap.data() : {};
+    const data = await resolveUserDoc(db, user);
     currentRole = data.role || 'floor'; // default to floor not sales to avoid wrong redirects
     const name = data.name || user.email.split('@')[0];
     document.getElementById('user-name').textContent = name;
@@ -451,6 +471,9 @@
       project = { id: projSnap.id, ...projSnap.data() };
       items = itemsSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => { const na=parseInt(a.productNo)||0, nb=parseInt(b.productNo)||0; return na!==nb ? na-nb : (a.name||'').localeCompare(b.name||''); });
       complaints = complSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Keep the public share mirror current every time a project is opened —
+      // this backfills projects that existed before syncPublicShare did.
+      syncPublicShare(projectId);
 
       // Sales staff: only see their assigned projects
       // Only redirect if role is explicitly 'sales' (not default fallback)
@@ -524,7 +547,7 @@
 
   // ── RENDER ALL ────────────────────────────────────────────────────────────
   function renderContent() {
-    const statusClass = 'badge-' + (project.status || 'not-started').toLowerCase().replace(/\s+/g,'-');
+    const statusClass = 'badge-' + (project.status || 'not-started').toLowerCase().replace(/[^a-z0-9]+/g,'-');
     const content = document.getElementById('main-content');
 
     content.innerHTML = `
@@ -675,7 +698,7 @@
             const _ovs2 = item.overallStatus || 'Structure';
             const statusClass = _ovs2.includes('(In Progress)')
               ? 'badge-' + _ovs2.replace(' (In Progress)','').toLowerCase() + '-inprogress'
-              : 'badge-' + _ovs2.toLowerCase().replace(/\s+/g,'-');
+              : 'badge-' + _ovs2.toLowerCase().replace(/[^a-z0-9]+/g,'-');
             return `<tr>
               <td style="color:var(--ink-3);font-size:12px">${esc(item.productNo || (i+1))}</td>
               <td><strong>${esc(item.name||'—')}</strong></td>
@@ -717,7 +740,7 @@ ${(function(){
           </div>
           <div class="form-field">
             <label>Order date <span style="font-size:11px;font-weight:400;color:var(--ink-3)">(production is scheduled from this date)</span></label>
-            <input type="date" id="e-order-date" value="${project.orderDate||''}">
+            <input type="date" id="e-order-date" value="${esc(project.orderDate||'')}">
           </div>
           <div class="form-field">
             <label>Location</label>
@@ -733,7 +756,7 @@ ${(function(){
           </div>
           <div class="form-field">
             <label>Handover date</label>
-            <input type="date" id="e-handover" value="${project.handoverDate||''}">
+            <input type="date" id="e-handover" value="${esc(project.handoverDate||'')}">
           </div>
           <div class="form-field">
             <label>Assignee</label>
@@ -799,6 +822,7 @@ ${(function(){
         updatedAt:      serverTimestamp(),
       };
       await updateDoc(doc(db, 'projects', projectId), updates);
+      await syncPublicShare(projectId);
       // Log handover date change
       if (updates.handoverDate && updates.handoverDate !== oldHandover) {
         const userName = document.getElementById('user-name').textContent;
@@ -1004,6 +1028,7 @@ ${(function(){
         updatedAt:       serverTimestamp(),
       });
       await logProjectActivity(deliveredBy + ' marked project as ' + status + ' on ' + deliveryDate + (notes ? ' · Notes: ' + notes : ''));
+      await syncPublicShare(projectId);
       Object.assign(project, { status, deliveredDate: deliveryDate, deliveredBy, deliveryNotes: notes });
       closeModal('modal-delivery');
       showToast('Project marked as ' + status);
@@ -1020,6 +1045,16 @@ ${(function(){
       itemsSnap.docs.forEach(d => {
         batch.push(deleteDoc(doc(db, 'projects', projectId, 'items', d.id)));
       });
+      // Also clean up the activity and handover-date-history subcollections,
+      // and the public share mirror — otherwise they're orphaned records that
+      // outlive the project they belonged to.
+      const [activitySnap, historySnap] = await Promise.all([
+        getDocs(collection(db, 'projects', projectId, 'activity')),
+        getDocs(collection(db, 'projects', projectId, 'dateHistory')),
+      ]);
+      activitySnap.docs.forEach(d => batch.push(deleteDoc(doc(db, 'projects', projectId, 'activity', d.id))));
+      historySnap.docs.forEach(d => batch.push(deleteDoc(doc(db, 'projects', projectId, 'dateHistory', d.id))));
+      batch.push(deleteDoc(doc(db, 'publicShares', projectId)).catch(() => {}));
       await Promise.all(batch);
       // Delete the project
       await deleteDoc(doc(db, 'projects', projectId));
@@ -1032,8 +1067,11 @@ ${(function(){
 
   window.closeModal = function(id) { document.getElementById(id).classList.remove('open'); };
 
-  window.copyShareLink = function() {
-    const url = window.location.origin + '/lyffin-ops/share.html?id=' + projectId;
+  window.copyShareLink = async function() {
+    const url = window.location.origin + '/share.html?id=' + projectId;
+    // Make sure the public mirror exists / is current before handing out the
+    // link — covers projects created before this sync mechanism existed.
+    await syncPublicShare(projectId);
     navigator.clipboard.writeText(url).then(function() {
       showToast('Share link copied — send to client');
     }).catch(function() {
@@ -1049,10 +1087,40 @@ ${(function(){
   }
 
   function esc(s) {
-    return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
   // ── ACTIVITY LOG ──────────────────────────────────────────────────────────
+  // Mirrors only the safe, customer-facing fields into a public collection
+  // (publicShares) that the no-login share page reads from — the real
+  // projects/items collections are never exposed to that page. Called after
+  // any write that could change what a client sees.
+  async function syncPublicShare(projectId) {
+    try {
+      const pSnap = await getDoc(doc(db, 'projects', projectId));
+      if (!pSnap.exists()) return;
+      const p = pSnap.data();
+      const itemsSnap = await getDocs(collection(db, 'projects', projectId, 'items'));
+      const itemsList = itemsSnap.docs.map(function(d) {
+        const it = d.data();
+        return {
+          name: it.name || '', productNo: it.productNo || '', qty: it.qty || 1,
+          area: it.area || '', dimensions: it.dimensions || '',
+          overallStatus: it.overallStatus || 'Structure',
+          carpentryStatus: it.carpentryStatus || 'pending',
+          polishStatus: it.polishStatus || 'pending',
+          upholsteryStatus: it.upholsteryStatus || 'pending',
+          packingStatus: it.packingStatus || 'pending'
+        };
+      });
+      await setDoc(doc(db, 'publicShares', projectId), {
+        projectName: p.projectName || '', location: p.location || '', orderNo: p.orderNo || '',
+        status: p.status || 'Not Started', handoverDate: p.handoverDate || '',
+        items: itemsList, updatedAt: serverTimestamp()
+      });
+    } catch (e) { console.error('publicShare sync failed', e); }
+  }
+
   async function logProjectActivity(message) {
     try {
       await addDoc(collection(db, 'projects', projectId, 'activity'), {
@@ -1061,7 +1129,7 @@ ${(function(){
         uid: currentUser ? currentUser.uid : '',
         at: serverTimestamp()
       });
-    } catch(e) { /* non-critical */ }
+    } catch(e) { console.error('Activity log write failed:', e.message); }
   }
 
   async function loadActivityLog() {
@@ -1117,7 +1185,7 @@ ${(function(){
 </script>
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/lyffin-ops/sw.js');
+  navigator.serviceWorker.register('/sw.js');
 }
 </script>
 

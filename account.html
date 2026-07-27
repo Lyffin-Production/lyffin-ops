@@ -4,11 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Lyffin Ops — Account</title>
-<link rel="manifest" href="/lyffin-ops/manifest.json">
+<link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#1a1a18">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Lyffin Ops">
-<link rel="apple-touch-icon" href="/lyffin-ops/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--ink:#1a1a18;--ink-2:#4a4a46;--ink-3:#9a9890;--surface:#f7f6f2;--surface-2:#eeecea;--border:#dddbd5;--gold:#b89a6a;--gold-lt:rgba(184,154,106,0.12);--white:#ffffff;--radius:6px;--sidebar-w:220px;--font-sans:'Inter',system-ui,sans-serif;--font-disp:'Playfair Display',Georgia,serif}
@@ -258,7 +258,7 @@ body{font-family:var(--font-sans);background:var(--surface);color:var(--ink);min
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js';
 import { getAuth, onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
-import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
+import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyC0aoUyBCHn63-WkJnPFbDJLF0x1GFMyxU",
@@ -275,10 +275,33 @@ const db = getFirestore(app);
 
 const ROLE_LABELS = {admin:'Admin / Director',sales:'Sales',design:'Design',supervisor:'Factory Supervisor',floor:'Factory Floor',qc:'Quality Control'};
 
+// Looks up the signed-in user's profile doc. If this is their first ever
+// sign-in (no users/{uid} doc yet), checks for an admin-created invite
+// matching their verified email and claims it — creating users/{uid} with
+// exactly the name/role the admin assigned, instead of silently falling
+// back to a default role. Firestore rules only allow this self-create when
+// the written role/name match the invite exactly, so a user can never
+// grant themselves a role this way.
+async function resolveUserDoc(db, user) {
+  const snap = await getDoc(doc(db, 'users', user.uid));
+  if (snap.exists()) return snap.data();
+  if (user.email) {
+    try {
+      const inviteSnap = await getDoc(doc(db, 'pendingInvites', user.email));
+      if (inviteSnap.exists()) {
+        const invite = inviteSnap.data();
+        const userDoc = { name: invite.name || '', email: user.email, role: invite.role || 'sales' };
+        await setDoc(doc(db, 'users', user.uid), userDoc);
+        return userDoc;
+      }
+    } catch (e) { /* fall through to default */ }
+  }
+  return {};
+}
+
 onAuthStateChanged(auth, async function(user) {
   if (!user) { window.location.href = 'login.html'; return; }
-  const snap = await getDoc(doc(db, 'users', user.uid));
-  const data = snap.exists() ? snap.data() : {};
+  const data = await resolveUserDoc(db, user);
   const name = data.name || user.email.split('@')[0];
   const role = data.role || 'sales';
   const initials = name.substring(0,2).toUpperCase();
@@ -312,6 +335,6 @@ window.signOut = async function() {
   window.location.href = 'login.html';
 };
 </script>
-<script>if('serviceWorker'in navigator){navigator.serviceWorker.register('/lyffin-ops/sw.js')}</script>
+<script>if('serviceWorker'in navigator){navigator.serviceWorker.register('/sw.js')}</script>
 </body>
 </html>
