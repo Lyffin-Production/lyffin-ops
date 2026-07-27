@@ -1264,14 +1264,18 @@
 
   /* ── render ─────────────────────────────────────────────────────────── */
   const $ = id => document.getElementById(id);
+  // Never overwrite a field the user is actively typing in — that's what was
+  // snapping "Minimum production days" (and the other settings) back to their
+  // clamped value on every keystroke, making it impossible to clear and retype.
+  function setVal(el, v){ if(document.activeElement !== el) el.value = v; }
 
   function render(){
-    $('lc-cap').value = cfg.capacity;
-    $('lc-buf').value = cfg.buffer;
-    $('lc-wd').value  = cfg.workDays;
-    $('lc-wip').value  = cfg.wip;
-    $('lc-lead').value = cfg.leadDays;
-    $('lc-min').value  = cfg.minDays;
+    setVal($('lc-cap'),  cfg.capacity);
+    setVal($('lc-buf'),  cfg.buffer);
+    setVal($('lc-wd'),   cfg.workDays);
+    setVal($('lc-wip'),  cfg.wip);
+    setVal($('lc-lead'), cfg.leadDays);
+    setVal($('lc-min'),  cfg.minDays);
     $('lc-daily').textContent  = num(dailySellable())+'/day';
     $('lc-perday').textContent = num(cfg.capacity/(cfg.workDays||26))+'/day';
     $('lc-sun').checked = cfg.sundayOff;
@@ -1416,6 +1420,10 @@
   $('lc-wip').addEventListener('input', function(){ cfg.wip=Math.min(40,Math.max(1,+this.value||6)); render(); });
   $('lc-lead').addEventListener('input', function(){ cfg.leadDays=Math.min(60,Math.max(0,+this.value||0)); render(); });
   $('lc-min').addEventListener('input',  function(){ cfg.minDays=Math.min(60,Math.max(1,+this.value||1)); render(); });
+  // Once you tap away, snap the field to its final clamped value.
+  ['lc-cap','lc-buf','lc-wd','lc-wip','lc-lead','lc-min'].forEach(id => {
+    $(id).addEventListener('blur', render);
+  });
   $('lc-sun').addEventListener('change', function(){ cfg.sundayOff=this.checked; render(); });
   $('lc-save').addEventListener('click', function(){
     const b=this; b.disabled=true; b.textContent='Saving…';

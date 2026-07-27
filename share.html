@@ -31,6 +31,16 @@ body{font-family:var(--font-sans);background:var(--surface);color:var(--ink);min
 .s-completed{background:#f0fdf4;color:#166534}.s-completed::before{background:#16a34a}
 .s-on-hold{background:#f3f4f6;color:#6b7280}.s-on-hold::before{background:#9ca3af}
 .s-not-started{background:#f3f4f6;color:#6b7280}.s-not-started::before{background:#9ca3af}
+.s-ready{background:#dcfce7;color:#14532d}.s-ready::before{background:#22c55e}
+.items-title{padding:20px 24px 6px;font-size:12px;font-weight:500;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em}
+.item-row{padding:14px 24px;border-bottom:1px solid var(--surface-2)}
+.item-row:last-child{border-bottom:none}
+.item-row-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.item-row-name{font-size:14px;font-weight:600}
+.item-no{color:var(--ink-3);font-weight:400;margin-right:2px}
+.item-row-meta{font-size:12px;color:var(--ink-3);margin-top:2px}
+.item-row .stage-pills{margin-top:9px}
+.item-row .stage-pill{font-size:11px;padding:4px 10px}
 .progress-section{padding:20px 24px}
 .progress-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .progress-label span:first-child{font-size:13px;font-weight:500}
@@ -142,6 +152,24 @@ function renderProject(project, items) {
   const LABELS = {carpentry:'Structure', polish:'Polish', upholstery:'Upholstery', packing:'Packing'};
   const STAGE_ORDER = ['Structure','Polish','Upholstery','Packing','Delivered','Completed'];
 
+  // Per-item stage pills — reuses the same sp-done/sp-pending/sp-inprogress/sp-na
+  // classes as the aggregate summary below, so an individual item's row matches
+  // the same colors the overall progress bar uses.
+  function itemStagePills(item) {
+    return STAGES.map(stage => {
+      const st = item[stage + 'Status'] || 'pending';
+      if (st === 'na')      return '<span class="stage-pill sp-na">' + LABELS[stage] + '</span>';
+      if (st === 'done')    return '<span class="stage-pill sp-done">' + LABELS[stage] + '</span>';
+      if (st === 'started') return '<span class="stage-pill sp-inprogress">' + LABELS[stage] + '</span>';
+      return '<span class="stage-pill sp-pending">' + LABELS[stage] + '</span>';
+    }).join('');
+  }
+  function itemBadgeClass(overallStatus) {
+    const s = overallStatus || 'Structure';
+    if (s === 'Ready') return 's-ready';
+    return 's-' + s.replace(' (In Progress)','').toLowerCase();
+  }
+
   const totalItems = items.length;
   const readyItems = items.filter(i => i.overallStatus === 'Ready').length;
   const pct = totalItems ? Math.round(readyItems / totalItems * 100) : 0;
@@ -189,6 +217,22 @@ function renderProject(project, items) {
     '</div>';
   }).join('');
 
+  const itemsListHtml = items.length ?
+    items.slice()
+      .sort((a,b) => { const na=parseInt(a.productNo)||0, nb=parseInt(b.productNo)||0; return na!==nb ? na-nb : (a.name||'').localeCompare(b.name||''); })
+      .map(item => {
+        const label = (item.overallStatus || 'Structure').replace(' (In Progress)',' · In progress');
+        return '<div class="item-row">' +
+          '<div class="item-row-head">' +
+            '<div class="item-row-name">' + (item.productNo ? '<span class="item-no">#' + esc(item.productNo) + '</span> ' : '') + esc(item.name||'Item') + '</div>' +
+            '<span class="status-badge ' + itemBadgeClass(item.overallStatus) + '" style="font-size:11px;padding:4px 12px">' + esc(label) + '</span>' +
+          '</div>' +
+          '<div class="item-row-meta">Qty: ' + (item.qty||1) + (item.area ? ' · ' + esc(item.area) : '') + (item.dimensions ? ' · ' + esc(item.dimensions) : '') + '</div>' +
+          '<div class="stage-pills">' + itemStagePills(item) + '</div>' +
+        '</div>';
+      }).join('')
+    : '<div style="padding:18px 24px;color:var(--ink-3);font-size:13px">No items added yet.</div>';
+
   document.getElementById('main').innerHTML =
     '<div class="card">' +
       '<div class="card-header">' +
@@ -224,6 +268,11 @@ function renderProject(project, items) {
           '</div>'
         : '') +
       '</div>' +
+    '</div>' +
+
+    '<div class="card">' +
+      '<div class="items-title">Item-by-item status</div>' +
+      itemsListHtml +
     '</div>' +
 
     '<div class="card">' +
