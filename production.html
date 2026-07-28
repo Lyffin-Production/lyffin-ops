@@ -486,12 +486,16 @@ function renderRow(projectId, item) {
 
   return '<tr>' +
     '<td>' +
+      '<div style="display:flex;gap:10px;align-items:flex-start">' +
+      (item.thumbnail ? '<img src="' + item.thumbnail + '" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0" alt="">' : '') +
+      '<div style="flex:1;min-width:0">' +
       '<div class="item-name">' + (item.productNo ? '<span style="color:var(--ink-3);font-weight:400">#' + esc(item.productNo) + '</span> ' : '') + esc(item.name||'Unnamed') + '</div>' +
       '<div class="item-meta">Qty: ' + (item.qty||1) + (item.area ? ' · ' + esc(item.area) : '') + (item.dimensions ? ' · ' + esc(item.dimensions) : '') + '</div>' +
       (item.details ? '<div class="item-meta" style="font-style:italic">' + esc(item.details) + '</div>' : '') +
       ((item.finishes && item.finishes.length) ? '<div class="item-meta">Finish: ' + item.finishes.filter(Boolean).map(esc).join(', ') + '</div>' : '') +
       ((item.upholstery && item.upholstery.length) ? '<div class="item-meta">Upholstery: ' + item.upholstery.filter(Boolean).map(esc).join(', ') + '</div>' : '') +
       auditHtml +
+      '</div></div>' +
     '</td>' +
     '<td><div class="stages">' + pills + '</div></td>' +
     '<td><span class="overall-badge ' + obCls + '">' + (item.overallStatus||'Structure').replace(' (In Progress)',' ▶') + '</span></td>' +

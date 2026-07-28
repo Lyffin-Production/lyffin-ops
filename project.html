@@ -707,7 +707,7 @@
               : 'badge-' + _ovs2.toLowerCase().replace(/[^a-z0-9]+/g,'-');
             return `<tr>
               <td style="color:var(--ink-3);font-size:12px">${esc(item.productNo || (i+1))}</td>
-              <td><strong>${esc(item.name||'—')}</strong></td>
+              <td><div style="display:flex;align-items:center;gap:8px">${item.thumbnail ? `<img src="${item.thumbnail}" style="width:32px;height:32px;object-fit:cover;border-radius:5px;border:1px solid var(--border);flex-shrink:0" alt="">` : ''}<strong>${esc(item.name||'—')}</strong></div></td>
               <td>${item.qty||1}</td>
               <td style="font-size:12px;color:var(--ink-3)">${esc(item.area||'—')}</td>
               <td style="font-size:12px;color:var(--ink-3)">${esc(item.dimensions||'—')}${item.details?`<br/><span style="font-style:italic;font-size:11px">${esc(item.details)}</span>`:""}${(item.finishes&&item.finishes.filter(Boolean).length)?`<br/><span style="font-size:11px">Finish: ${item.finishes.filter(Boolean).map(esc).join(', ')}</span>`:""}${(item.upholstery&&item.upholstery.filter(Boolean).length)?`<br/><span style="font-size:11px">Upholstery: ${item.upholstery.filter(Boolean).map(esc).join(', ')}</span>`:""}</td>
@@ -973,7 +973,7 @@ ${(function(){
       }).join('');
       const isReady = item.overallStatus === 'Ready';
       return '<tr style="background:' + (isReady ? '#f0fdf4' : 'transparent') + '">' +
-        '<td style="padding:10px 16px;font-weight:500">' + (item.productNo ? '<span style="color:var(--ink-3);font-weight:400">#' + esc(item.productNo) + '</span> ' : '') + esc(item.name||'—') + '</td>' +
+        '<td style="padding:10px 16px;font-weight:500"><div style="display:flex;align-items:center;gap:8px">' + (item.thumbnail ? '<img src="' + item.thumbnail + '" style="width:30px;height:30px;object-fit:cover;border-radius:5px;border:1px solid var(--border);flex-shrink:0" alt="">' : '') + '<span>' + (item.productNo ? '<span style="color:var(--ink-3);font-weight:400">#' + esc(item.productNo) + '</span> ' : '') + esc(item.name||'—') + '</span></div></td>' +
         '<td style="padding:10px 16px;font-size:12px;color:var(--ink-3)">Qty: ' + (item.qty||1) + (item.area ? ' · ' + esc(item.area) : '') + (item.details ? '<br><span style="font-style:italic">' + esc(item.details) + '</span>' : '') +
         ((item.finishes && item.finishes.filter(Boolean).length) ? '<br>Finish: ' + item.finishes.filter(Boolean).map(esc).join(', ') : '') +
         ((item.upholstery && item.upholstery.filter(Boolean).length) ? '<br>Upholstery: ' + item.upholstery.filter(Boolean).map(esc).join(', ') : '') + '</td>' +
