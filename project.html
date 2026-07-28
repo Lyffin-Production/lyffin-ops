@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<link rel="manifest" href="/manifest.json">
+<link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1a1a18">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Lyffin Ops">
-<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Lyffin Ops — Project</title>
 <style>
@@ -1120,7 +1120,11 @@ ${(function(){
   window.copyShareLink = async function() {
     const token = await getOrCreateShareToken(projectId);
     await syncPublicShare(projectId); // ensure the public data exists and is current
-    const url = window.location.origin + '/share.html?t=' + token;
+    // Resolve relative to THIS page's own URL, not the domain root — this
+    // way the link is correct whether the app is served at a domain root
+    // (ops.lyffin.com/) or in a subfolder (e.g. .../lyffin-ops/), without
+    // needing to know or care which.
+    const url = new URL('share.html?t=' + token, window.location.href).href;
     navigator.clipboard.writeText(url).then(function() {
       showToast('Share link copied — send to client');
     }).catch(function() {
@@ -1141,7 +1145,7 @@ ${(function(){
       await deleteDoc(doc(db, 'shareTokens', projectId)).catch(() => {});
       const newToken = await getOrCreateShareToken(projectId);
       await syncPublicShare(projectId);
-      const url = window.location.origin + '/share.html?t=' + newToken;
+      const url = new URL('share.html?t=' + newToken, window.location.href).href;
       navigator.clipboard.writeText(url).then(function() {
         showToast('Old link revoked — new link copied');
       }).catch(function() {
@@ -1298,7 +1302,7 @@ ${(function(){
 </script>
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js');
+  navigator.serviceWorker.register('sw.js');
 }
 </script>
 

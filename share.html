@@ -3,7 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Project Status — Lyffin</title>
+<title>Lyffin — Order Update</title>
+<meta property="og:title" content="Lyffin — Order Update">
+<meta property="og:description" content="Tap to see your order's production progress and item-by-item status.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="icon-512.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Lyffin — Order Update">
+<meta name="twitter:description" content="Tap to see your order's production progress and item-by-item status.">
+<meta name="twitter:image" content="icon-512.png">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--ink:#1a1a18;--ink-2:#4a4a46;--ink-3:#9a9890;--surface:#f7f6f2;--surface-2:#eeecea;--border:#dddbd5;--gold:#b89a6a;--gold-lt:rgba(184,154,106,0.12);--white:#ffffff;--radius:6px;--font-sans:'Inter',system-ui,sans-serif;--font-disp:'Playfair Display',Georgia,serif}
@@ -80,7 +88,7 @@ body{font-family:var(--font-sans);background:var(--surface);color:var(--ink);min
 <div class="header">
   <div>
     <div class="logo-name">lyffin</div>
-    <div class="logo-sub">Project Status</div>
+    <div class="logo-sub" id="logo-sub">Project Status</div>
   </div>
   <div class="header-right">
     Read-only · For client use<br>
@@ -153,6 +161,7 @@ async function loadProject() {
 
     document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short'});
     document.title = (project.projectName || 'Project') + ' — Lyffin Status';
+    document.getElementById('logo-sub').textContent = project.projectName || 'Project Status';
 
     renderProject(project, items);
   } catch(e) {
