@@ -146,6 +146,37 @@
   .notes-area textarea:focus { border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-lt); }
   .notes-save { margin-top: 10px; }
 
+  /* FOLLOW-UPS: tasks */
+  .task-row { display: flex; align-items: flex-start; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--surface-2); }
+  .task-row:last-child { border-bottom: none; }
+  .task-row.task-done .task-text { text-decoration: line-through; color: var(--ink-3); }
+  .task-check { flex-shrink: 0; margin-top: 2px; cursor: pointer; }
+  .task-check input { width: 16px; height: 16px; accent-color: var(--gold); cursor: pointer; }
+  .task-body { flex: 1; min-width: 0; }
+  .task-text { font-size: 13.5px; color: var(--ink); }
+  .task-meta { font-size: 11.5px; color: var(--ink-3); margin-top: 3px; }
+  .task-overdue { color: #a83c2e; font-weight: 600; }
+  .task-del { flex-shrink: 0; background: none; border: none; color: var(--ink-3); cursor: pointer; font-size: 13px; padding: 2px 6px; }
+  .task-del:hover { color: #a83c2e; }
+  .task-add-form { display: flex; gap: 8px; padding: 14px 20px; flex-wrap: wrap; border-top: 1px solid var(--surface-2); }
+  .task-add-form input[type="text"] { flex: 1; min-width: 160px; }
+  .task-add-form input, .task-add-form select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; font-family: var(--font-sans); color: var(--ink); background: var(--white); }
+  .task-add-form select { max-width: 140px; }
+  .task-add-form input[type="date"] { max-width: 140px; }
+
+  /* FOLLOW-UPS: communication log */
+  .log-row { padding: 12px 20px; border-bottom: 1px solid var(--surface-2); }
+  .log-row:last-child { border-bottom: none; }
+  .log-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .log-channel { font-size: 11px; font-weight: 600; color: var(--gold); text-transform: uppercase; letter-spacing: .04em; }
+  .log-when { font-size: 11px; color: var(--ink-3); }
+  .log-summary { font-size: 13.5px; color: var(--ink-2); margin-top: 4px; line-height: 1.5; white-space: pre-line; }
+  .log-add-form { padding: 14px 20px; border-top: 1px solid var(--surface-2); display: flex; flex-direction: column; gap: 8px; }
+  .log-add-form select { align-self: flex-start; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; font-family: var(--font-sans); color: var(--ink); background: var(--white); }
+  .log-add-form textarea { width: 100%; min-height: 60px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13.5px; font-family: var(--font-sans); color: var(--ink); resize: vertical; outline: none; }
+  .log-add-form textarea:focus { border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-lt); }
+  .log-add-form button { align-self: flex-start; }
+
   /* EMPTY */
   .empty-small { padding: 24px; text-align: center; font-size: 13px; color: var(--ink-3); }
 
@@ -547,6 +578,7 @@
         <div class="tab" onclick="switchTab('edit', this)">Edit project</div>
         <div class="tab" onclick="switchTab('complaints', this)">Complaints (${complaints.length})</div>
         <div class="tab" onclick="switchTab('notes', this)">Notes</div>
+        <div class="tab" onclick="switchTab('followups', this)">Follow-ups</div>
         <div class="tab" onclick="switchTab('activity', this)">Activity log</div>
       </div>
 
@@ -590,6 +622,7 @@
     if (tab === 'edit')        { el.innerHTML = renderEdit(); loadEditAssignees(); }
     if (tab === 'complaints')  el.innerHTML = renderComplaints();
     if (tab === 'notes')       el.innerHTML = renderNotes();
+    if (tab === 'followups')   { el.innerHTML = '<div class="empty-small">Loading…</div>'; loadFollowups(); }
     if (tab === 'supervisor')  el.innerHTML = renderSupervisor();
     if (tab === 'activity')    { el.innerHTML = '<div class="section-card"><div class="section-header"><div class="section-title">Activity log</div></div><div id="activity-list" style="padding:0"><div class="empty-small">Loading…</div></div></div>'; loadActivityLog(); }
   }
@@ -971,7 +1004,7 @@ ${(function(){
       <div class="section-card" style="margin-bottom:16px">
         <div class="section-header">
           <div class="section-title">Delivery record</div>
-          <span class="badge badge-${(project.status||'').toLowerCase().replace(/\s/g,'-')}">${project.status||''}</span>
+          <span class="badge badge-${(project.status||'').toLowerCase().replace(/[^a-z0-9]+/g,'-')}">${esc(project.status||'')}</span>
         </div>
         <div style="padding:16px 20px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div>
@@ -1001,6 +1034,162 @@ ${(function(){
         </div>
       </div>`;
   }
+
+  // ── FOLLOW-UPS TAB (tasks + client communication log) ──────────────────────
+  let _taskOwnerOptionsCache = null;
+
+  async function loadTaskOwnerOptions() {
+    if (_taskOwnerOptionsCache) return _taskOwnerOptionsCache;
+    try {
+      const snap = await getDocs(collection(db, 'users'));
+      const users = snap.docs.map(d => d.data()).filter(u => u.name);
+      _taskOwnerOptionsCache = users.map(u => '<option value="' + esc(u.name) + '">' + esc(u.name) + '</option>').join('');
+    } catch (e) { _taskOwnerOptionsCache = ''; }
+    return _taskOwnerOptionsCache;
+  }
+
+  async function loadFollowups() {
+    const el = document.getElementById('tab-content');
+    try {
+      const [taskSnap, logSnap, ownerOpts] = await Promise.all([
+        getDocs(query(collection(db, 'tasks'), where('projectId', '==', projectId))),
+        getDocs(query(collection(db, 'commLogs'), where('projectId', '==', projectId))),
+        loadTaskOwnerOptions()
+      ]);
+      const tasks = taskSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+      const logs = logSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+      el.innerHTML = renderFollowupsContent(tasks, logs, ownerOpts);
+    } catch (e) {
+      el.innerHTML = '<div class="section-card"><div class="empty-small">Couldn\'t load follow-ups: ' + esc(e.message) + '</div></div>';
+    }
+  }
+
+  function renderFollowupsContent(tasks, logs, ownerOpts) {
+    const today = new Date().toISOString().slice(0,10);
+    // Open tasks first (earliest due date first, undated last), then done ones.
+    const sorted = tasks.slice().sort((a, b) => {
+      if ((a.status === 'done') !== (b.status === 'done')) return a.status === 'done' ? 1 : -1;
+      const da = a.dueDate || '9999-99-99', db_ = b.dueDate || '9999-99-99';
+      return da < db_ ? -1 : da > db_ ? 1 : 0;
+    });
+    const taskRows = sorted.length ? sorted.map(t => {
+      const overdue = t.status !== 'done' && t.dueDate && t.dueDate < today;
+      const done = t.status === 'done';
+      return '<div class="task-row' + (done ? ' task-done' : '') + '">' +
+        '<label class="task-check"><input type="checkbox" ' + (done ? 'checked' : '') + ' onchange="toggleTask(\'' + t.id + '\', this.checked)"><span></span></label>' +
+        '<div class="task-body">' +
+          '<div class="task-text">' + esc(t.text || '') + '</div>' +
+          '<div class="task-meta">' +
+            (t.ownerName ? esc(t.ownerName) : 'Unassigned') +
+            (t.dueDate ? ' · due ' + formatDate(t.dueDate) : '') +
+            (overdue ? ' <span class="task-overdue">OVERDUE</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<button class="task-del" onclick="deleteTask(\'' + t.id + '\')" title="Delete">✕</button>' +
+      '</div>';
+    }).join('') : '<div class="empty-small">No tasks yet — add one below.</div>';
+
+    const sortedLogs = logs.slice().sort((a, b) => (b.at?.seconds || 0) - (a.at?.seconds || 0));
+    const logRows = sortedLogs.length ? sortedLogs.map(l => {
+      const when = l.at && l.at.seconds ? new Date(l.at.seconds * 1000).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+      return '<div class="log-row">' +
+        '<div class="log-head"><span class="log-channel">' + esc(l.channel || 'Note') + '</span><span class="log-when">' + esc(when) + ' · ' + esc(l.loggedBy || '') + '</span></div>' +
+        '<div class="log-summary">' + esc(l.summary || '') + '</div>' +
+      '</div>';
+    }).join('') : '<div class="empty-small">No communication logged yet.</div>';
+
+    return `
+      <div class="section-card" style="margin-bottom:16px">
+        <div class="section-header"><div class="section-title">Tasks</div></div>
+        <div id="task-list">${taskRows}</div>
+        <div class="task-add-form">
+          <input type="text" id="new-task-text" placeholder="What needs to happen?">
+          <select id="new-task-owner"><option value="">Owner…</option>${ownerOpts}</select>
+          <input type="date" id="new-task-due">
+          <button class="btn btn-primary" onclick="addTask()">Add task</button>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header"><div class="section-title">Client communication log</div></div>
+        <div id="log-list">${logRows}</div>
+        <div class="log-add-form">
+          <select id="new-log-channel">
+            <option value="Call">Call</option>
+            <option value="WhatsApp">WhatsApp</option>
+            <option value="Email">Email</option>
+            <option value="In person">In person</option>
+            <option value="Other">Other</option>
+          </select>
+          <textarea id="new-log-summary" placeholder="What was discussed or promised?"></textarea>
+          <button class="btn btn-primary" onclick="addCommLog()">Log entry</button>
+        </div>
+      </div>`;
+  }
+
+  window.addTask = async function() {
+    const textEl = document.getElementById('new-task-text');
+    const ownerEl = document.getElementById('new-task-owner');
+    const dueEl = document.getElementById('new-task-due');
+    const text = textEl.value.trim();
+    if (!text) { showToast('Enter what needs to happen'); return; }
+    const ownerName = ownerEl.value;
+    const dueDate = dueEl.value;
+    try {
+      await addDoc(collection(db, 'tasks'), {
+        projectId, projectName: project.projectName || '',
+        text, ownerName: ownerName || '', dueDate: dueDate || '',
+        status: 'open',
+        createdBy: document.getElementById('user-name').textContent,
+        createdAt: serverTimestamp()
+      });
+      await logProjectActivity((document.getElementById('user-name').textContent) + ' added a task: ' + text);
+      loadFollowups();
+    } catch (e) {
+      showToast('Save failed: ' + e.message);
+    }
+  };
+
+  window.toggleTask = async function(taskId, checked) {
+    try {
+      await updateDoc(doc(db, 'tasks', taskId), {
+        status: checked ? 'done' : 'open',
+        completedAt: checked ? serverTimestamp() : null,
+        completedBy: checked ? document.getElementById('user-name').textContent : null
+      });
+      loadFollowups();
+    } catch (e) {
+      showToast('Update failed: ' + e.message);
+      loadFollowups();
+    }
+  };
+
+  window.deleteTask = async function(taskId) {
+    if (!confirm('Delete this task?')) return;
+    try {
+      await deleteDoc(doc(db, 'tasks', taskId));
+      loadFollowups();
+    } catch (e) { showToast('Delete failed: ' + e.message); }
+  };
+
+  window.addCommLog = async function() {
+    const channelEl = document.getElementById('new-log-channel');
+    const summaryEl = document.getElementById('new-log-summary');
+    const summary = summaryEl.value.trim();
+    if (!summary) { showToast('Enter what was discussed'); return; }
+    try {
+      await addDoc(collection(db, 'commLogs'), {
+        projectId, projectName: project.projectName || '',
+        channel: channelEl.value, summary,
+        loggedBy: document.getElementById('user-name').textContent,
+        loggedByUid: currentUser ? currentUser.uid : '',
+        at: serverTimestamp()
+      });
+      loadFollowups();
+    } catch (e) {
+      showToast('Save failed: ' + e.message);
+    }
+  };
 
   window.saveNotes = async function() {
     const notes = document.getElementById('notes-input').value.trim();

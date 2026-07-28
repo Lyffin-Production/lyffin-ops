@@ -387,7 +387,7 @@ function renderCard(d) {
   const total = items.length;
   const ready = items.filter(function(i) { return i.overallStatus === 'Ready'; }).length;
   const pct = total ? Math.round(ready / total * 100) : 0;
-  const badgeCls = 'badge-' + (project.status || 'structure').toLowerCase().replace(/\s/g,'');
+  const badgeCls = 'badge-' + (project.status || 'structure').toLowerCase().replace(/[^a-z0-9]+/g,'-');
   const rows = items.map(function(item) { return renderRow(project.id, item); }).join('');
   const pid = project.id.replace(/[^a-z0-9]/gi,'_');
   const isOpen = false; // always start collapsed, user taps to expand
@@ -468,7 +468,7 @@ function renderRow(projectId, item) {
     const base = _ovs.replace(' (In Progress)','').toLowerCase();
     obCls = 'ob-' + base + '-started';
   } else {
-    obCls = 'ob-' + _ovs.toLowerCase().replace(/\s/g,'');
+    obCls = 'ob-' + _ovs.toLowerCase().replace(/[^a-z0-9]+/g,'-');
   }
 
   // Audit trail: who last touched this item
