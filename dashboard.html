@@ -245,6 +245,16 @@
     margin-bottom: 28px;
   }
 
+  /* MY TASKS */
+  .mt-row { display: flex; align-items: center; gap: 10px; padding: 11px 20px; border-bottom: 1px solid var(--surface-2); cursor: pointer; }
+  .mt-row:last-child { border-bottom: none; }
+  .mt-row:hover { background: var(--surface); }
+  .mt-body { flex: 1; min-width: 0; }
+  .mt-text { font-size: 13.5px; color: var(--ink); }
+  .mt-meta { font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+  .mt-overdue { color: #c0392b; font-weight: 600; }
+  .mt-empty { padding: 20px; text-align: center; font-size: 13px; color: var(--ink-3); }
+
   .stat-card {
     background: var(--white);
     border: 1px solid var(--border);
@@ -847,6 +857,16 @@
       </div>
     </div>
 
+    <!-- My Tasks -->
+    <div id="my-tasks-card" style="background:var(--white);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:24px;display:none">
+      <div style="padding:14px 20px;border-bottom:1px solid var(--surface-2);display:flex;align-items:center;gap:8px">
+        <div style="font-size:14px;font-weight:500">My tasks</div>
+        <span id="my-tasks-dot" style="display:none;width:8px;height:8px;border-radius:50%;background:#c0392b"></span>
+        <span id="my-tasks-count" style="font-size:11px;color:var(--ink-3);margin-left:auto"></span>
+      </div>
+      <div id="my-tasks-list"></div>
+    </div>
+
     <!-- Project progress tracker -->
     <div style="background:var(--white);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:24px">
       <div style="padding:14px 20px;border-bottom:1px solid var(--surface-2);display:flex;align-items:center;justify-content:space-between">
@@ -979,7 +999,7 @@
   import { onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
   import {
     collection, addDoc, onSnapshot, query,
-    orderBy, doc, getDoc, getDocs, serverTimestamp, setDoc
+    orderBy, where, doc, getDoc, getDocs, updateDoc, serverTimestamp, setDoc
   } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
   import { db, auth, esc, resolveUserDoc, initOfflineBanner } from './shared.js';
 
@@ -1033,6 +1053,7 @@
     // Start loading projects
     loadProjects();
     loadAssignees();
+    loadMyTasks();
   });
 
   // ── LOAD PROJECTS (real-time) ─────────────────────────────────────────────
@@ -1044,6 +1065,73 @@
       sel.innerHTML = '<option value="">Select…</option>' +
         users.map(u => '<option>' + (u.name||u.email) + '</option>').join('');
     }
+  }
+
+  // ── MY TASKS ──────────────────────────────────────────────────────────────
+  // Shows this signed-in person's own open tasks across every project, not
+  // just the one they happen to have open — that's what makes an assigned
+  // task actually get noticed instead of sitting unseen on a project page
+  // nobody's visiting. The red dot marks tasks assigned since they last
+  // looked at this list; it clears itself as soon as they view the list.
+  async function loadMyTasks() {
+    if (!currentUserName) return;
+    const card = document.getElementById('my-tasks-card');
+    try {
+      const snap = await getDocs(query(
+        collection(db, 'tasks'),
+        where('ownerName', '==', currentUserName),
+        where('status', '==', 'open')
+      ));
+      const tasks = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+      if (!tasks.length) { card.style.display = 'none'; return; }
+      card.style.display = '';
+      renderMyTasks(tasks);
+      markMyTasksSeen(tasks);
+    } catch (e) {
+      console.error('loadMyTasks failed:', e.message);
+      card.style.display = 'none';
+    }
+  }
+
+  function renderMyTasks(tasks) {
+    const today = new Date().toISOString().slice(0,10);
+    const sorted = tasks.slice().sort((a, b) => {
+      const da = a.dueDate || '9999-99-99', db_ = b.dueDate || '9999-99-99';
+      return da < db_ ? -1 : da > db_ ? 1 : 0;
+    });
+    const unseenCount = tasks.filter(t => t.seen === false).length;
+    document.getElementById('my-tasks-dot').style.display = unseenCount > 0 ? '' : 'none';
+    document.getElementById('my-tasks-count').textContent = tasks.length + (tasks.length === 1 ? ' task' : ' tasks');
+
+    document.getElementById('my-tasks-list').innerHTML = sorted.map(t => {
+      const overdue = t.dueDate && t.dueDate < today;
+      const dueLabel = t.dueDate
+        ? new Date(t.dueDate).toLocaleDateString('en-IN', { day:'2-digit', month:'short' })
+        : 'no due date';
+      return '<div class="mt-row" onclick="goToTaskProject(\'' + esc(t.projectId) + '\')">' +
+        '<div class="mt-body">' +
+          '<div class="mt-text">' + esc(t.text || '') + '</div>' +
+          '<div class="mt-meta">' + esc(t.projectName || 'Project') + ' · due ' + dueLabel +
+            (overdue ? ' <span class="mt-overdue">OVERDUE</span>' : '') +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  window.goToTaskProject = function(projectId) {
+    window.location.href = 'project.html?id=' + projectId + '&tab=followups';
+  };
+
+  // Marks any newly-assigned (unseen) tasks as seen now that they're
+  // actually showing in this list — clears the red dot without needing a
+  // separate "mark as read" click.
+  async function markMyTasksSeen(tasks) {
+    const unseen = tasks.filter(t => t.seen === false);
+    if (!unseen.length) return;
+    try {
+      await Promise.all(unseen.map(t => updateDoc(doc(db, 'tasks', t.id), { seen: true })));
+    } catch (e) { /* non-critical — dot will just show again next load */ }
   }
 
   function loadProjects() {

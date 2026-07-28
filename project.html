@@ -435,7 +435,7 @@
   let project = null;
   let items = [];
   let complaints = [];
-  let activeTab = 'overview';
+  let activeTab = params.get('tab') || 'overview';
 
   // ── AUTH ──────────────────────────────────────────────────────────────────
   onAuthStateChanged(auth, async (user) => {
@@ -573,20 +573,20 @@
 
       <!-- Tabs -->
       <div class="tabs" id="tabs-container">
-        <div class="tab active" onclick="switchTab('overview', this)">Overview</div>
-        <div class="tab" onclick="switchTab('items', this)">Production items (${items.length})</div>
-        <div class="tab" onclick="switchTab('edit', this)">Edit project</div>
-        <div class="tab" onclick="switchTab('complaints', this)">Complaints (${complaints.length})</div>
-        <div class="tab" onclick="switchTab('notes', this)">Notes</div>
-        <div class="tab" onclick="switchTab('followups', this)">Follow-ups</div>
-        <div class="tab" onclick="switchTab('activity', this)">Activity log</div>
+        <div class="tab${activeTab==='overview'?' active':''}" onclick="switchTab('overview', this)">Overview</div>
+        <div class="tab${activeTab==='items'?' active':''}" onclick="switchTab('items', this)">Production items (${items.length})</div>
+        <div class="tab${activeTab==='edit'?' active':''}" onclick="switchTab('edit', this)">Edit project</div>
+        <div class="tab${activeTab==='complaints'?' active':''}" onclick="switchTab('complaints', this)">Complaints (${complaints.length})</div>
+        <div class="tab${activeTab==='notes'?' active':''}" onclick="switchTab('notes', this)">Notes</div>
+        <div class="tab${activeTab==='followups'?' active':''}" onclick="switchTab('followups', this)">Follow-ups</div>
+        <div class="tab${activeTab==='activity'?' active':''}" onclick="switchTab('activity', this)">Activity log</div>
       </div>
 
       <!-- Tab content -->
       <div id="tab-content"></div>
     `;
 
-    renderTab('overview');
+    renderTab(activeTab);
   }
 
   async function loadEditAssignees() {
@@ -1139,7 +1139,7 @@ ${(function(){
       await addDoc(collection(db, 'tasks'), {
         projectId, projectName: project.projectName || '',
         text, ownerName: ownerName || '', dueDate: dueDate || '',
-        status: 'open',
+        status: 'open', seen: false,
         createdBy: document.getElementById('user-name').textContent,
         createdAt: serverTimestamp()
       });
