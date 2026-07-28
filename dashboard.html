@@ -876,6 +876,14 @@
       <div id="dashboard-gantt" style="padding:0"></div>
     </div>
 
+    <!-- Project view tabs -->
+    <div style="display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px">
+      <div class="proj-tab" style="padding:9px 14px;font-size:13px;color:var(--ink-3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px" onclick="switchProjTab('ongoing', this)">Ongoing</div>
+      <div class="proj-tab" style="padding:9px 14px;font-size:13px;color:var(--ink-3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px" onclick="switchProjTab('delivered', this)">Delivered</div>
+      <div class="proj-tab" style="padding:9px 14px;font-size:13px;color:var(--ink-3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px" onclick="switchProjTab('completed', this)">Completed</div>
+      <div class="proj-tab" style="padding:9px 14px;font-size:13px;color:var(--ink-3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px" onclick="switchProjTab('all', this)">All</div>
+    </div>
+
     <!-- Filters -->
     <div class="filters">
       <div class="search-box">
@@ -1076,12 +1084,23 @@
   async function loadMyTasks() {
     if (!currentUserName) return;
     const card = document.getElementById('my-tasks-card');
+    // TEMPORARY DEBUG — remove once the missing-card issue is resolved.
+    console.log('[MY-TASKS-DEBUG] currentUserName =', JSON.stringify(currentUserName));
+    try {
+      const allOpenSnap = await getDocs(query(collection(db, 'tasks'), where('status', '==', 'open')));
+      console.log('[MY-TASKS-DEBUG] all open tasks in the whole app:', allOpenSnap.docs.map(d => ({
+        text: d.data().text, ownerName: JSON.stringify(d.data().ownerName), status: d.data().status
+      })));
+    } catch (e) {
+      console.log('[MY-TASKS-DEBUG] could not even read all open tasks:', e.message);
+    }
     try {
       const snap = await getDocs(query(
         collection(db, 'tasks'),
         where('ownerName', '==', currentUserName),
         where('status', '==', 'open')
       ));
+      console.log('[MY-TASKS-DEBUG] matched tasks for this exact name:', snap.docs.length);
       const tasks = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
       if (!tasks.length) { card.style.display = 'none'; return; }
       card.style.display = '';
@@ -1168,7 +1187,7 @@
       updateStats();
       updateComplaintsCount();
       populateAssigneeFilter();
-      renderTable(allProjects);
+      filterProjects();
       renderDashboardGantt(allProjects);
       document.getElementById('page-loading').style.display = 'none';
     });
@@ -1259,8 +1278,20 @@
   document.getElementById('card-overdue').addEventListener('click', function() { showOverdue(); });
   document.getElementById('card-complaints').addEventListener('click', function() { window.location.assign('qc.html'); });
 
+  // Keeps the tab bar's highlighted state in sync when the active tab is
+  // changed programmatically (e.g. from the Completed/Overdue stat cards)
+  // rather than by clicking a tab directly.
+  function syncProjTabVisual(tab) {
+    const order = ['ongoing', 'delivered', 'completed', 'all'];
+    const tabs = document.querySelectorAll('.proj-tab');
+    tabs.forEach(t => { t.style.color = 'var(--ink-3)'; t.style.borderBottomColor = 'transparent'; });
+    const idx = order.indexOf(tab);
+    if (idx >= 0 && tabs[idx]) { tabs[idx].style.color = 'var(--ink)'; tabs[idx].style.borderBottomColor = 'var(--gold)'; }
+  }
+
   window.showCompleted = function() {
     currentProjTab = 'all';
+    syncProjTabVisual('all');
     document.getElementById('filter-status').value = 'Completed';
     filterProjects();
     setTimeout(function() {
@@ -1273,6 +1304,7 @@
 
   window.showOverdue = function() {
     currentProjTab = 'all';
+    syncProjTabVisual('all');
     showingOverdue = true;
     document.getElementById('filter-status').value = '';
     filterProjects();
@@ -1290,7 +1322,7 @@
     if (search || status || assignee) showingOverdue = false;
 
     const today = new Date(); today.setHours(0,0,0,0);
-    const ONGOING_STATUSES = ['Not Started','Structure','Carpentry','Polish','Upholstery','Packing','Complaints'];
+    const ONGOING_STATUSES = ['Not Started','Structure','Carpentry','Polish','Upholstery','Packing','Complaints','On Hold'];
     const filtered = allProjects.filter(p => {
       const matchSearch = !search ||
         (p.projectName||'').toLowerCase().includes(search) ||
