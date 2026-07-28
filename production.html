@@ -259,7 +259,7 @@ body{font-family:var(--font-sans);background:var(--surface);color:var(--ink);min
 <div class="toast" id="toast"></div>
 <script type="module">
 import { onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
-import { collection, onSnapshot, query, doc, getDoc, updateDoc, getDocs, addDoc, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
+import { collection, onSnapshot, query, doc, getDoc, updateDoc, getDocs, addDoc, serverTimestamp, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
 import { db, auth, esc, resolveUserDoc, initOfflineBanner, isValidTransition } from './shared.js';
 
 initOfflineBanner();
@@ -521,18 +521,6 @@ async function syncPublicShare(projectId) {
     if (!pSnap.exists()) return;
     const p = pSnap.data();
     const itemsSnap = await getDocs(collection(db, 'projects', projectId, 'items'));
-    const items = itemsSnap.docs.map(function(d) {
-      const it = d.data();
-      return {
-        name: it.name || '', productNo: it.productNo || '', qty: it.qty || 1,
-        area: it.area || '', dimensions: it.dimensions || '',
-        overallStatus: it.overallStatus || 'Structure',
-        carpentryStatus: it.carpentryStatus || 'pending',
-        polishStatus: it.polishStatus || 'pending',
-        upholsteryStatus: it.upholsteryStatus || 'pending',
-        packingStatus: it.packingStatus || 'pending'
-      };
-    });
 
     const existing = await getDoc(doc(db, 'publicShares', token));
     const expiresAt = existing.exists() && existing.data().expiresAt
@@ -542,8 +530,33 @@ async function syncPublicShare(projectId) {
     await setDoc(doc(db, 'publicShares', token), {
       projectName: p.projectName || '', location: p.location || '', orderNo: p.orderNo || '',
       status: p.status || 'Not Started', handoverDate: p.handoverDate || '',
-      items: items, active: true, expiresAt, updatedAt: serverTimestamp()
+      active: true, expiresAt, updatedAt: serverTimestamp()
     });
+
+    // Each item is its own small document (including its thumbnail, if any)
+    // rather than one big array — see the comment in firestore.rules for
+    // why. Mirror the current set exactly: write/update every real item,
+    // then remove any mirrored item that no longer exists on the real
+    // project (e.g. it was deleted there).
+    const currentIds = new Set();
+    for (const d of itemsSnap.docs) {
+      const it = d.data();
+      currentIds.add(d.id);
+      await setDoc(doc(db, 'publicShares', token, 'items', d.id), {
+        name: it.name || '', productNo: it.productNo || '', qty: it.qty || 1,
+        area: it.area || '', dimensions: it.dimensions || '',
+        thumbnail: it.thumbnail || null,
+        overallStatus: it.overallStatus || 'Structure',
+        carpentryStatus: it.carpentryStatus || 'pending',
+        polishStatus: it.polishStatus || 'pending',
+        upholsteryStatus: it.upholsteryStatus || 'pending',
+        packingStatus: it.packingStatus || 'pending'
+      });
+    }
+    const mirroredSnap = await getDocs(collection(db, 'publicShares', token, 'items'));
+    for (const d of mirroredSnap.docs) {
+      if (!currentIds.has(d.id)) await deleteDoc(doc(db, 'publicShares', token, 'items', d.id));
+    }
   } catch (e) { console.error('publicShare sync failed', e); }
 }
 

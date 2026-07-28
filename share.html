@@ -108,7 +108,7 @@ body{font-family:var(--font-sans);background:var(--surface);color:var(--ink);min
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js';
-import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
+import { getFirestore, doc, getDoc, collection, getDocs } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyC0aoUyBCHn63-WkJnPFbDJLF0x1GFMyxU",
@@ -157,7 +157,11 @@ async function loadProject() {
       status: pub.status || 'Not Started',
       handoverDate: pub.handoverDate || ''
     };
-    const items = pub.items || [];
+    // Items live as their own small documents under this token (see
+    // firestore.rules) rather than one array on this doc — keeps a large
+    // order's photos from ever approaching Firestore's 1MB-per-document cap.
+    const itemsSnap = await getDocs(collection(db, 'publicShares', token, 'items'));
+    const items = itemsSnap.docs.map(d => d.data());
 
     document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short'});
     document.title = (project.projectName || 'Project') + ' — Lyffin Status';
@@ -253,7 +257,10 @@ function renderProject(project, items) {
         const label = (item.overallStatus || 'Structure').replace(' (In Progress)',' · In progress');
         return '<div class="item-row">' +
           '<div class="item-row-head">' +
-            '<div class="item-row-name">' + (item.productNo ? '<span class="item-no">#' + esc(item.productNo) + '</span> ' : '') + esc(item.name||'Item') + '</div>' +
+            '<div class="item-row-name" style="display:flex;align-items:center;gap:10px">' +
+              (item.thumbnail ? '<img src="' + item.thumbnail + '" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0" alt="">' : '') +
+              '<span>' + (item.productNo ? '<span class="item-no">#' + esc(item.productNo) + '</span> ' : '') + esc(item.name||'Item') + '</span>' +
+            '</div>' +
             '<span class="status-badge ' + itemBadgeClass(item.overallStatus) + '" style="font-size:11px;padding:4px 12px">' + esc(label) + '</span>' +
           '</div>' +
           '<div class="item-row-meta">Qty: ' + (item.qty||1) + (item.area ? ' · ' + esc(item.area) : '') + (item.dimensions ? ' · ' + esc(item.dimensions) : '') + '</div>' +
