@@ -210,7 +210,7 @@ body{font-family:var(--font-sans);background:var(--surface);color:var(--ink);min
           <option value="Delivered">Delivered</option>
           <option value="On Hold">On Hold</option>
         </select>
-        <button class="btn btn-ghost" onclick="bulkUpdateStatus()" style="height:36px">Apply</button>
+        <button class="btn btn-ghost" id="btn-bulk-apply" onclick="bulkUpdateStatus()" style="height:36px">Apply</button>
       </div>
       <input type="text" id="prod-search" class="filter-select" placeholder="Search project…" oninput="filterProjects()" style="width:160px">
       <select class="filter-select" id="filter-status" onchange="filterProjects()">
@@ -258,22 +258,11 @@ body{font-family:var(--font-sans);background:var(--surface);color:var(--ink);min
 
 <div class="toast" id="toast"></div>
 <script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js';
-import { getAuth, onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
-import { getFirestore, collection, onSnapshot, query, doc, getDoc, updateDoc, getDocs, addDoc, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
+import { onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
+import { collection, onSnapshot, query, doc, getDoc, updateDoc, getDocs, addDoc, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
+import { db, auth, esc, resolveUserDoc, initOfflineBanner, isValidTransition } from './shared.js';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyC0aoUyBCHn63-WkJnPFbDJLF0x1GFMyxU",
-  authDomain: "lyffin-platform.firebaseapp.com",
-  projectId: "lyffin-platform",
-  storageBucket: "lyffin-platform.firebasestorage.app",
-  messagingSenderId: "618920465280",
-  appId: "1:618920465280:web:11ba5583ff3f2b778a2765"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+initOfflineBanner();
 
 const STAGES = ['carpentry','polish','upholstery','packing','ready'];
 const LABELS = {carpentry:'Structure',polish:'Polish',upholstery:'Upholstery',packing:'Packing',ready:'Ready'};
@@ -289,30 +278,9 @@ let _remarkProjectId = null;
 let _remarkItemId = null;
 let _remarkItemName = '';
 
-// Looks up the signed-in user's profile doc, self-provisioning from a
-// matching admin-created invite on first sign-in (see login.html for the
-// full explanation). Firestore rules only allow this self-create when the
-// written role/name match the invite exactly.
-async function resolveUserDoc(db, user) {
-  const snap = await getDoc(doc(db, 'users', user.uid));
-  if (snap.exists()) return snap.data();
-  if (user.email) {
-    try {
-      const inviteSnap = await getDoc(doc(db, 'pendingInvites', user.email));
-      if (inviteSnap.exists()) {
-        const invite = inviteSnap.data();
-        const userDoc = { name: invite.name || '', email: user.email, role: invite.role || 'floor' };
-        await setDoc(doc(db, 'users', user.uid), userDoc);
-        return userDoc;
-      }
-    } catch (e) { /* fall through to default */ }
-  }
-  return {};
-}
-
 onAuthStateChanged(auth, async function(user) {
   if (!user) { window.location.href = 'login.html'; return; }
-  const data = await resolveUserDoc(db, user);
+  const data = await resolveUserDoc(user, 'floor');
   const name = data.name || user.email.split('@')[0];
   currentRole = data.role || 'floor';
   currentUserName = name;
@@ -533,12 +501,18 @@ function renderRow(projectId, item) {
 
 // ── STAGE ACTIONS ──────────────────────────────────────────────────────────
 
-// Mirrors only the safe, customer-facing fields into a public collection
-// (publicShares) that the no-login share page reads from — the real
-// projects/items collections are never exposed to that page. Called after
-// any write that could change what a client sees.
+// Mirrors only the safe, customer-facing fields into publicShares/{token}
+// — the no-login share page reads only from there, never the real
+// projects/items collections. Does nothing if no share link has ever been
+// generated for this project (that only happens from project.html's
+// "Copy link"/"Revoke" actions, which create the shareTokens bookkeeping
+// doc this function looks for).
 async function syncPublicShare(projectId) {
   try {
+    const tokSnap = await getDoc(doc(db, 'shareTokens', projectId));
+    if (!tokSnap.exists() || !tokSnap.data().token) return;
+    const token = tokSnap.data().token;
+
     const pSnap = await getDoc(doc(db, 'projects', projectId));
     if (!pSnap.exists()) return;
     const p = pSnap.data();
@@ -555,10 +529,16 @@ async function syncPublicShare(projectId) {
         packingStatus: it.packingStatus || 'pending'
       };
     });
-    await setDoc(doc(db, 'publicShares', projectId), {
+
+    const existing = await getDoc(doc(db, 'publicShares', token));
+    const expiresAt = existing.exists() && existing.data().expiresAt
+      ? existing.data().expiresAt
+      : new Date(Date.now() + 90 * 86400000);
+
+    await setDoc(doc(db, 'publicShares', token), {
       projectName: p.projectName || '', location: p.location || '', orderNo: p.orderNo || '',
       status: p.status || 'Not Started', handoverDate: p.handoverDate || '',
-      items: items, updatedAt: serverTimestamp()
+      items: items, active: true, expiresAt, updatedAt: serverTimestamp()
     });
   } catch (e) { console.error('publicShare sync failed', e); }
 }
@@ -792,17 +772,44 @@ window.saveRemark = async function() {
 
 // ── BULK STATUS UPDATE ────────────────────────────────────────────────────
 window.bulkUpdateStatus = async function() {
+  const btn = document.getElementById('btn-bulk-apply');
   const projectId = document.getElementById('bulk-project-sel').value;
   const newStatus = document.getElementById('bulk-status-sel').value;
   if (!projectId || !newStatus) { showToast('Select a project and status'); return; }
-  const projName = (window._projects||[]).find(p=>p.id===projectId)?.projectName || projectId;
+  const proj = (window._projects||[]).find(p=>p.id===projectId);
+  const projName = proj?.projectName || projectId;
+  const oldStatus = proj?.status || 'Not Started';
+
+  if (newStatus !== oldStatus) {
+    if (newStatus === 'Delivered' || newStatus === 'Completed') {
+      let projItems = itemsCache[projectId];
+      if (!projItems) {
+        const snap = await getDocs(collection(db, 'projects', projectId, 'items'));
+        projItems = snap.docs.map(d => d.data());
+      }
+      const unfinished = projItems.filter(i => i.overallStatus !== 'Ready');
+      if (unfinished.length) {
+        alert('Can\'t mark "' + projName + '" ' + newStatus + ' — ' + unfinished.length + ' item(s) are not yet Ready. Update them below first.');
+        return;
+      }
+    } else if (!isValidTransition(oldStatus, newStatus)) {
+      if (!confirm('That skips from "' + oldStatus + '" straight to "' + newStatus + '" for "' + projName + '". Apply anyway?')) return;
+    }
+  }
   if (!confirm('Change status of "' + projName + '" to ' + newStatus + '?')) return;
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Applying…'; }
   try {
     await updateDoc(doc(db, 'projects', projectId), { status: newStatus, updatedAt: serverTimestamp() });
     await syncPublicShare(projectId);
     await logActivity(projectId, currentUserName + ' bulk-updated project status to ' + newStatus);
     showToast(projName + ' → ' + newStatus);
-  } catch(e) { showToast('Error: ' + e.message); }
+  } catch(e) {
+    showToast('Save failed: ' + e.message);
+    alert('The status update did not go through:\n\n' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Apply'; }
+  }
 };
 
 // ── ACTIVITY LOG ──────────────────────────────────────────────────────────
@@ -830,9 +837,6 @@ window.toggleProject = function(pid) {
 window.filterProjects = function() { render(); };
 window.signOut = async function() { await fbSignOut(auth); window.location.href = 'login.html'; };
 
-function esc(s) {
-  return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;

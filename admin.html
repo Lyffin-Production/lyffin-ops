@@ -300,7 +300,13 @@
 <div class="main">
   <div class="topbar">
     <div class="topbar-title">Admin Dashboard</div>
-    <div class="topbar-date" id="topbar-date"></div>
+    <div style="display:flex;align-items:center;gap:14px">
+      <button class="btn btn-ghost" onclick="exportProjectsCSV(this)" style="font-size:12px;padding:6px 12px">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="width:13px;height:13px;margin-right:4px;vertical-align:-2px"><path d="M8 1v9M4.5 6.5L8 10l3.5-3.5"/><path d="M2 12v2a1 1 0 001 1h10a1 1 0 001-1v-2"/></svg>
+        Export CSV
+      </button>
+      <div class="topbar-date" id="topbar-date"></div>
+    </div>
   </div>
 
   <div class="content">
@@ -483,25 +489,14 @@
 </div>
 
 <script type="module">
-  import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js';
-  import { getAuth, onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
+  import { onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
   import {
-    getFirestore, collection, getDocs, onSnapshot,
+    collection, getDocs, onSnapshot,
     query, orderBy, limit, doc, getDoc, setDoc, serverTimestamp, deleteDoc
   } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
+  import { db, auth, esc, resolveUserDoc, initOfflineBanner } from './shared.js';
 
-  const firebaseConfig = {
-    apiKey:            "AIzaSyC0aoUyBCHn63-WkJnPFbDJLF0x1GFMyxU",
-    authDomain:        "lyffin-platform.firebaseapp.com",
-    projectId:         "lyffin-platform",
-    storageBucket:     "lyffin-platform.firebasestorage.app",
-    messagingSenderId: "618920465280",
-    appId:             "1:618920465280:web:11ba5583ff3f2b778a2765"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db   = getFirestore(app);
+  initOfflineBanner();
 
   const PROD_STATUSES = ['Structure','Polish','Upholstery','Packing'];
 
@@ -509,33 +504,10 @@
   document.getElementById('topbar-date').textContent =
     new Date().toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 
-  // Looks up the signed-in user's profile doc. If this is their first ever
-  // sign-in (no users/{uid} doc yet), checks for an admin-created invite
-  // matching their verified email and claims it — creating users/{uid} with
-  // exactly the name/role the admin assigned, instead of silently falling
-  // back to a default role. Firestore rules only allow this self-create when
-  // the written role/name match the invite exactly.
-  async function resolveUserDoc(db, user) {
-    const snap = await getDoc(doc(db, 'users', user.uid));
-    if (snap.exists()) return snap.data();
-    if (user.email) {
-      try {
-        const inviteSnap = await getDoc(doc(db, 'pendingInvites', user.email));
-        if (inviteSnap.exists()) {
-          const invite = inviteSnap.data();
-          const userDoc = { name: invite.name || '', email: user.email, role: invite.role || 'sales' };
-          await setDoc(doc(db, 'users', user.uid), userDoc);
-          return userDoc;
-        }
-      } catch (e) { /* fall through to default */ }
-    }
-    return {};
-  }
-
   // ── AUTH ──────────────────────────────────────────────────────────────────
   onAuthStateChanged(auth, async (user) => {
     if (!user) { window.location.href = 'login.html'; return; }
-    const data = await resolveUserDoc(db, user);
+    const data = await resolveUserDoc(user, 'sales');
     if (data.role !== 'admin') { window.location.href = 'dashboard.html'; return; }
     const name = data.name || user.email.split('@')[0];
     document.getElementById('user-name').textContent = name;
@@ -916,6 +888,43 @@
     } catch(e) { alert('Error: ' + e.message); }
   };
 
+  // Escapes a value for CSV: wraps in quotes and doubles any internal quotes
+  // whenever the value contains a comma, quote, or newline.
+  function csvField(v) {
+    const s = (v === null || v === undefined) ? '' : String(v);
+    if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+
+  window.exportProjectsCSV = async function(btn) {
+    if (btn) { btn.disabled = true; }
+    try {
+      const snap = await getDocs(collection(db, 'projects'));
+      const rows = snap.docs.map(d => d.data());
+      const headers = ['Order No', 'Project Name', 'Location', 'Status', 'Order Date', 'Handover Date', 'Assignee', 'Fabric Status', 'Delivery Status', 'Contact No'];
+      const lines = [headers.map(csvField).join(',')];
+      rows.forEach(p => {
+        lines.push([
+          p.orderNo || '', p.projectName || '', p.location || '', p.status || '',
+          p.orderDate || '', p.handoverDate || '', p.assignee || '',
+          p.fabricStatus || '', p.deliveryStatus || '', p.contactNo || ''
+        ].map(csvField).join(','));
+      });
+      const csv = lines.join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'lyffin-projects-' + new Date().toISOString().slice(0,10) + '.csv';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Export failed: ' + e.message);
+    } finally {
+      if (btn) { btn.disabled = false; }
+    }
+  };
+
   window.saveNewUser = async function() {
     const name  = document.getElementById('au-name').value.trim();
     const email = document.getElementById('au-email').value.trim();
@@ -1002,10 +1011,6 @@
     if (diff < 3600) return Math.floor(diff/60) + 'm ago';
     if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
     return Math.floor(diff/86400) + 'd ago';
-  }
-
-  function esc(s) {
-    return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
   window.signOut = async function() {

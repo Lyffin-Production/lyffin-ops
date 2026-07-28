@@ -256,52 +256,15 @@ body{font-family:var(--font-sans);background:var(--surface);color:var(--ink);min
 </div>
 
 <script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js';
-import { getAuth, onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
-import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
-
-const firebaseConfig = {
-  apiKey: "AIzaSyC0aoUyBCHn63-WkJnPFbDJLF0x1GFMyxU",
-  authDomain: "lyffin-platform.firebaseapp.com",
-  projectId: "lyffin-platform",
-  storageBucket: "lyffin-platform.firebasestorage.app",
-  messagingSenderId: "618920465280",
-  appId: "1:618920465280:web:11ba5583ff3f2b778a2765"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+import { onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
+import { db, auth, esc, resolveUserDoc, initOfflineBanner } from './shared.js';
 
 const ROLE_LABELS = {admin:'Admin / Director',sales:'Sales',design:'Design',supervisor:'Factory Supervisor',floor:'Factory Floor',qc:'Quality Control'};
-
-// Looks up the signed-in user's profile doc. If this is their first ever
-// sign-in (no users/{uid} doc yet), checks for an admin-created invite
-// matching their verified email and claims it — creating users/{uid} with
-// exactly the name/role the admin assigned, instead of silently falling
-// back to a default role. Firestore rules only allow this self-create when
-// the written role/name match the invite exactly, so a user can never
-// grant themselves a role this way.
-async function resolveUserDoc(db, user) {
-  const snap = await getDoc(doc(db, 'users', user.uid));
-  if (snap.exists()) return snap.data();
-  if (user.email) {
-    try {
-      const inviteSnap = await getDoc(doc(db, 'pendingInvites', user.email));
-      if (inviteSnap.exists()) {
-        const invite = inviteSnap.data();
-        const userDoc = { name: invite.name || '', email: user.email, role: invite.role || 'sales' };
-        await setDoc(doc(db, 'users', user.uid), userDoc);
-        return userDoc;
-      }
-    } catch (e) { /* fall through to default */ }
-  }
-  return {};
-}
+initOfflineBanner();
 
 onAuthStateChanged(auth, async function(user) {
   if (!user) { window.location.href = 'login.html'; return; }
-  const data = await resolveUserDoc(db, user);
+  const data = await resolveUserDoc(user, 'sales');
   const name = data.name || user.email.split('@')[0];
   const role = data.role || 'sales';
   const initials = name.substring(0,2).toUpperCase();

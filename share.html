@@ -115,10 +115,10 @@ const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
 
 const params = new URLSearchParams(window.location.search);
-const projectId = params.get('id');
+const token = params.get('t') || params.get('id'); // 'id' kept only so pre-existing links don't hard 404; see note below
 
-if (!projectId) {
-  document.getElementById('main').innerHTML = '<div class="error-state"><h2>No project found</h2><p>This link does not contain a valid project ID.</p></div>';
+if (!token) {
+  document.getElementById('main').innerHTML = '<div class="error-state"><h2>No link found</h2><p>This URL is missing its share link. Ask your contact at Lyffin to resend it.</p></div>';
 } else {
   loadProject();
 }
@@ -126,19 +126,23 @@ if (!projectId) {
 async function loadProject() {
   try {
     // This page never touches the real projects/items collections — it reads
-    // only publicShares/{id}, a mirror containing exclusively the fields a
-    // client is meant to see. See project.html / production.html for where
-    // that mirror gets written (syncPublicShare).
-    const shareSnap = await getDoc(doc(db, 'publicShares', projectId));
+    // only publicShares/{token}, a mirror keyed by a random per-project share
+    // token (not the project's Firestore ID) containing exclusively the
+    // fields a client is meant to see. The token is looked up by exact
+    // document ID only — this collection can't be listed/enumerated, so
+    // knowing a project exists doesn't help you find its data without the
+    // real link. See project.html for where the mirror gets written and how
+    // a link is revoked (Firestore rules deny reads once revoked or expired,
+    // which surfaces here as the same "not found" state below).
+    const shareSnap = await getDoc(doc(db, 'publicShares', token));
 
     if (!shareSnap.exists()) {
-      document.getElementById('main').innerHTML = '<div class="error-state"><h2>Project not found</h2><p>This project may have been removed, the link is incorrect, or its status hasn\'t been published yet.</p></div>';
+      document.getElementById('main').innerHTML = '<div class="error-state"><h2>Link not found</h2><p>This link may have been revoked, replaced with a newer one, or the project may have been removed. Ask your contact at Lyffin for a current link.</p></div>';
       return;
     }
 
     const pub = shareSnap.data();
     const project = {
-      id: projectId,
       projectName: pub.projectName || '',
       location: pub.location || '',
       orderNo: pub.orderNo || '',
@@ -152,7 +156,14 @@ async function loadProject() {
 
     renderProject(project, items);
   } catch(e) {
-    document.getElementById('main').innerHTML = '<div class="error-state"><h2>Error loading project</h2><p>' + esc(e.message) + '</p></div>';
+    // A revoked or expired link fails Firestore's security rule (rather
+    // than simply "not existing"), which surfaces here as a permission
+    // error — show the same friendly message rather than the raw error.
+    if (e.code === 'permission-denied') {
+      document.getElementById('main').innerHTML = '<div class="error-state"><h2>Link no longer active</h2><p>This link has expired or been revoked. Ask your contact at Lyffin for a current link.</p></div>';
+    } else {
+      document.getElementById('main').innerHTML = '<div class="error-state"><h2>Error loading project</h2><p>' + esc(e.message) + '</p></div>';
+    }
   }
 }
 

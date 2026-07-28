@@ -358,22 +358,10 @@
 
 <!-- Firebase -->
 <script type="module">
-  import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js';
-  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
-  import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
+  import { signInWithEmailAndPassword, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
+  import { db, auth, resolveUserDoc, initOfflineBanner } from './shared.js';
 
-  const firebaseConfig = {
-    apiKey:            "AIzaSyC0aoUyBCHn63-WkJnPFbDJLF0x1GFMyxU",
-    authDomain:        "lyffin-platform.firebaseapp.com",
-    projectId:         "lyffin-platform",
-    storageBucket:     "lyffin-platform.firebasestorage.app",
-    messagingSenderId: "618920465280",
-    appId:             "1:618920465280:web:11ba5583ff3f2b778a2765"
-  };
-
-  const app  = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db   = getFirestore(app);
+  initOfflineBanner();
 
   // Role → page map
   const ROLE_PAGES = {
@@ -388,36 +376,10 @@
   // If already signed in, redirect
   onAuthStateChanged(auth, async (user) => {
     if (user) {
-      const role = await getUserRole(db, user);
-      window.location.href = ROLE_PAGES[role] || 'dashboard.html';
+      const data = await resolveUserDoc(user, 'sales');
+      window.location.href = ROLE_PAGES[data.role] || 'dashboard.html';
     }
   });
-
-  // Looks up the signed-in user's role. If this is their first ever sign-in
-  // (no users/{uid} doc yet), checks for an admin-created invite matching
-  // their verified email and claims it — creating users/{uid} with exactly
-  // the name/role the admin assigned. This is what makes an invited team
-  // member's role actually take effect on their first login, instead of
-  // silently falling back to 'sales'. Firestore rules only allow this
-  // self-create when the written role/name match the invite exactly, so a
-  // user can never grant themselves a different role this way.
-  async function getUserRole(db, user) {
-    const snap = await getDoc(doc(db, 'users', user.uid));
-    if (snap.exists()) return snap.data().role;
-
-    if (user.email) {
-      try {
-        const inviteSnap = await getDoc(doc(db, 'pendingInvites', user.email));
-        if (inviteSnap.exists()) {
-          const invite = inviteSnap.data();
-          const userDoc = { name: invite.name || '', email: user.email, role: invite.role || 'sales' };
-          await setDoc(doc(db, 'users', user.uid), userDoc);
-          return userDoc.role;
-        }
-      } catch (e) { /* fall through to default below */ }
-    }
-    return 'sales';
-  }
 
   window.handleSignIn = async function () {
     const email    = document.getElementById('email').value.trim();
@@ -436,8 +398,8 @@
 
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
-      const role = await getUserRole(db, cred.user);
-      window.location.href = ROLE_PAGES[role] || 'dashboard.html';
+      const data = await resolveUserDoc(cred.user, 'sales');
+      window.location.href = ROLE_PAGES[data.role] || 'dashboard.html';
     } catch (e) {
       const messages = {
         'auth/user-not-found':   'No account found with this email.',

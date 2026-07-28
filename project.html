@@ -377,7 +377,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modal-delivery')">Cancel</button>
-      <button class="btn btn-primary" onclick="confirmDelivery()" style="background:#16a34a;border-color:#16a34a">Confirm delivery</button>
+      <button class="btn btn-primary" id="btn-confirm-delivery" onclick="confirmDelivery()" style="background:#16a34a;border-color:#16a34a">Confirm delivery</button>
     </div>
   </div>
 </div>
@@ -385,25 +385,14 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-  import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js';
-  import { getAuth, onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
+  import { onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
   import {
-    getFirestore, doc, getDoc, updateDoc, deleteDoc, collection,
+    doc, getDoc, updateDoc, deleteDoc, collection,
     getDocs, addDoc, query, where, serverTimestamp, orderBy, setDoc
   } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
+  import { db, auth, esc, resolveUserDoc, initOfflineBanner, STATUS_ORDER, isValidTransition } from './shared.js';
 
-  const firebaseConfig = {
-    apiKey:            "AIzaSyC0aoUyBCHn63-WkJnPFbDJLF0x1GFMyxU",
-    authDomain:        "lyffin-platform.firebaseapp.com",
-    projectId:         "lyffin-platform",
-    storageBucket:     "lyffin-platform.firebasestorage.app",
-    messagingSenderId: "618920465280",
-    appId:             "1:618920465280:web:11ba5583ff3f2b778a2765"
-  };
-
-  const app  = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db   = getFirestore(app);
+  initOfflineBanner();
 
   // Get project ID from URL
   const params = new URLSearchParams(window.location.search);
@@ -417,32 +406,11 @@
   let complaints = [];
   let activeTab = 'overview';
 
-  // Looks up the signed-in user's profile doc, self-provisioning from a
-  // matching admin-created invite on first sign-in (see login.html for the
-  // full explanation). Firestore rules only allow this self-create when the
-  // written role/name match the invite exactly.
-  async function resolveUserDoc(db, user) {
-    const snap = await getDoc(doc(db, 'users', user.uid));
-    if (snap.exists()) return snap.data();
-    if (user.email) {
-      try {
-        const inviteSnap = await getDoc(doc(db, 'pendingInvites', user.email));
-        if (inviteSnap.exists()) {
-          const invite = inviteSnap.data();
-          const userDoc = { name: invite.name || '', email: user.email, role: invite.role || 'floor' };
-          await setDoc(doc(db, 'users', user.uid), userDoc);
-          return userDoc;
-        }
-      } catch (e) { /* fall through to default */ }
-    }
-    return {};
-  }
-
   // ── AUTH ──────────────────────────────────────────────────────────────────
   onAuthStateChanged(auth, async (user) => {
     if (!user) { window.location.href = 'login.html'; return; }
     currentUser = user;
-    const data = await resolveUserDoc(db, user);
+    const data = await resolveUserDoc(user, 'floor');
     currentRole = data.role || 'floor'; // default to floor not sales to avoid wrong redirects
     const name = data.name || user.email.split('@')[0];
     document.getElementById('user-name').textContent = name;
@@ -658,13 +626,18 @@
         <div style="padding:16px 20px;font-size:13.5px;color:var(--ink-2);line-height:1.6">${esc(project.notes)}</div>
       </div>` : ''}
       <div class="section-card" style="border:1px dashed var(--border)">
-        <div style="padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div style="padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
           <div>
             <div style="font-size:13px;font-weight:500;color:var(--ink)">Client status page</div>
-            <div style="font-size:12px;color:var(--ink-3);margin-top:2px">Read-only link you can share with the client — no login needed</div>
+            <div style="font-size:12px;color:var(--ink-3);margin-top:2px">Read-only link you can share with the client — no login needed. Expires automatically after ${SHARE_LINK_DAYS} days.</div>
           </div>
-          <button class="btn btn-ghost" onclick="copyShareLink()" style="flex-shrink:0">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="width:14px;height:14px"><path d="M10 2l4 4-4 4"/><path d="M14 6H6a4 4 0 000 8h1"/></svg>
+          <div style="display:flex;gap:8px;flex-shrink:0">
+            ${['admin','sales','supervisor'].includes(currentRole) ? `<button class="btn btn-ghost" onclick="revokeShareLink()" title="Invalidate the old link and generate a new one" style="color:#a83c2e">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="width:14px;height:14px"><path d="M2 8a6 6 0 1010-4.5M2 8V3M2 8h5"/></svg>
+              Revoke &amp; regenerate
+            </button>` : ''}
+            <button class="btn btn-ghost" onclick="copyShareLink()" style="flex-shrink:0">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="width:14px;height:14px"><path d="M10 2l4 4-4 4"/><path d="M14 6H6a4 4 0 000 8h1"/></svg>
             Copy link
           </button>
         </div>
@@ -796,27 +769,63 @@ ${(function(){
           </div>
           <div class="form-field full" style="display:flex;justify-content:flex-end;gap:10px;padding-top:4px">
             <button class="btn btn-ghost" onclick="switchTab('overview', document.querySelector('.tab'))">Cancel</button>
-            <button class="btn btn-primary" onclick="saveEdit()">Save changes</button>
+            <button class="btn btn-primary" id="btn-save-edit" onclick="saveEdit()">Save changes</button>
           </div>
         </div>
       </div>`;
   }
 
   window.saveEdit = async function() {
+    const btn = document.getElementById('btn-save-edit');
+
+    const name = document.getElementById('e-name').value.trim();
+    const orderDate = document.getElementById('e-order-date').value;
+    const handoverDate = document.getElementById('e-handover').value;
+    const contactNo = document.getElementById('e-contact').value.trim();
+    const newStatus = document.getElementById('e-status').value;
+    const oldStatus = project.status || 'Not Started';
+
+    // ── Validation ──────────────────────────────────────────────────────
+    if (!name) { showToast('Project name is required'); return; }
+    if (orderDate && handoverDate && handoverDate < orderDate) {
+      showToast('Handover date can\'t be before the order date'); return;
+    }
+    if (contactNo && !/^[\d\s+()-]{7,15}$/.test(contactNo)) {
+      showToast('Contact number looks invalid — digits only, 7–15 characters'); return;
+    }
+
+    // ── Status workflow guards ─────────────────────────────────────────
+    if (newStatus !== oldStatus) {
+      const unfinished = items.filter(i => i.overallStatus !== 'Ready');
+      if ((newStatus === 'Delivered' || newStatus === 'Completed') && unfinished.length) {
+        alert('Can\'t mark this ' + newStatus + ' — ' + unfinished.length + ' item(s) are not yet Ready:\n' +
+          unfinished.slice(0, 8).map(i => '• ' + (i.name || 'item')).join('\n') +
+          (unfinished.length > 8 ? '\n…and ' + (unfinished.length - 8) + ' more' : '') +
+          '\n\nUse the Delivery checklist once every item is ready, or update items in Factory first.');
+        return;
+      }
+      if (!isValidTransition(oldStatus, newStatus)) {
+        const ok = confirm('That skips from "' + oldStatus + '" straight to "' + newStatus + '" — the normal order is ' +
+          STATUS_ORDER.join(' → ') + '.\n\nSave anyway?');
+        if (!ok) return;
+      }
+    }
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
     try {
       const oldHandover = project.handoverDate || '';
       const oldOrderDate = project.orderDate || '';
       const updates = {
-        projectName:    document.getElementById('e-name').value.trim(),
+        projectName:    name,
         orderNo:        document.getElementById('e-order').value.trim(),
-        orderDate:      document.getElementById('e-order-date').value,
+        orderDate:      orderDate,
         location:       document.getElementById('e-location').value.trim(),
         address:        document.getElementById('e-address').value.trim(),
         coordinates:    document.getElementById('e-coords').value.trim(),
-        handoverDate:   document.getElementById('e-handover').value,
+        handoverDate:   handoverDate,
         assignee:       document.getElementById('e-assignee').value,
-        status:         document.getElementById('e-status').value,
-        contactNo:      document.getElementById('e-contact').value.trim(),
+        status:         newStatus,
+        contactNo:      contactNo,
         fabricStatus:   document.getElementById('e-fabric').value,
         deliveryStatus: document.getElementById('e-delivery').value,
         updatedAt:      serverTimestamp(),
@@ -840,12 +849,26 @@ ${(function(){
         const uName = document.getElementById('user-name').textContent;
         await logProjectActivity('Order date changed from ' + (oldOrderDate || 'none') + ' to ' + (updates.orderDate || 'none') + ' by ' + uName);
       }
+      // Log status and assignee changes specifically, so the audit trail
+      // shows exactly what moved and to what — not just "details updated".
+      const userName = document.getElementById('user-name').textContent;
+      if (updates.status !== oldStatus) {
+        await logProjectActivity('Status changed from ' + oldStatus + ' to ' + updates.status + ' by ' + userName);
+      }
+      if (updates.assignee !== (project.assignee || '')) {
+        await logProjectActivity('Assignee changed from ' + (project.assignee || 'none') + ' to ' + (updates.assignee || 'none') + ' by ' + userName);
+      }
       // Log general edit activity
-      await logProjectActivity((document.getElementById('user-name').textContent) + ' updated project details');
+      await logProjectActivity(userName + ' updated project details');
       Object.assign(project, updates);
       showToast('Project updated');
       renderContent();
-    } catch(e) { showToast('Error: ' + e.message); }
+    } catch(e) {
+      showToast('Save failed: ' + e.message);
+      alert('The save did not go through:\n\n' + e.message + '\n\nYour changes are still in the form — please try again.');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Save changes'; }
+    }
   };
 
   // ── COMPLAINTS TAB ────────────────────────────────────────────────────────
@@ -1003,6 +1026,7 @@ ${(function(){
   };
 
   window.confirmDelivery = async function() {
+    const btn = document.getElementById('btn-confirm-delivery');
     const deliveryDate = document.getElementById('d-date').value;
     const deliveredBy  = document.getElementById('d-by').value.trim();
     const notes        = document.getElementById('d-notes').value.trim();
@@ -1018,6 +1042,15 @@ ${(function(){
       showToast('Please complete the delivery checklist');
       return;
     }
+    const unfinished = items.filter(i => i.overallStatus !== 'Ready');
+    if (unfinished.length) {
+      alert('Can\'t confirm delivery — ' + unfinished.length + ' item(s) are not yet Ready:\n' +
+        unfinished.slice(0, 8).map(i => '• ' + (i.name || 'item')).join('\n') +
+        (unfinished.length > 8 ? '\n…and ' + (unfinished.length - 8) + ' more' : '') +
+        '\n\nUpdate them in Factory first.');
+      return;
+    }
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
     try {
       await updateDoc(doc(db, 'projects', projectId), {
         status,
@@ -1033,11 +1066,16 @@ ${(function(){
       closeModal('modal-delivery');
       showToast('Project marked as ' + status);
       renderContent();
-    } catch(e) { showToast('Error: ' + e.message); }
+    } catch(e) {
+      showToast('Save failed: ' + e.message);
+      alert('The save did not go through:\n\n' + e.message + '\n\nPlease try again.');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Confirm delivery'; }
+    }
   };
 
   window.deleteProject = async function() {
-    if (!confirm('Delete ' + (project.projectName||'this project') + '? This will permanently delete the project and all its production items. This cannot be undone.')) return;
+    if (!confirm('Delete ' + (project.projectName||'this project') + '? This permanently deletes the project, its production items, and every complaint/QC record logged against it. This cannot be undone.')) return;
     try {
       // Delete all items in subcollection first
       const itemsSnap = await getDocs(collection(db, 'projects', projectId, 'items')); itemsSnap.docs.sort((a,b)=>{ const na=parseInt(a.data().productNo)||0,nb=parseInt(b.data().productNo)||0; return na!==nb?na-nb:(a.data().name||'').localeCompare(b.data().name||''); });
@@ -1046,37 +1084,72 @@ ${(function(){
         batch.push(deleteDoc(doc(db, 'projects', projectId, 'items', d.id)));
       });
       // Also clean up the activity and handover-date-history subcollections,
-      // and the public share mirror — otherwise they're orphaned records that
-      // outlive the project they belonged to.
-      const [activitySnap, historySnap] = await Promise.all([
+      // the public share mirror, and the complaints/QC records that
+      // reference this project by ID — otherwise all of these are orphaned
+      // records that outlive the project they belonged to.
+      const [activitySnap, historySnap, complaintsSnap, qcSnap] = await Promise.all([
         getDocs(collection(db, 'projects', projectId, 'activity')),
         getDocs(collection(db, 'projects', projectId, 'dateHistory')),
+        getDocs(query(collection(db, 'complaints'), where('projectId', '==', projectId))),
+        getDocs(query(collection(db, 'qc_reports'), where('projectId', '==', projectId))),
       ]);
       activitySnap.docs.forEach(d => batch.push(deleteDoc(doc(db, 'projects', projectId, 'activity', d.id))));
       historySnap.docs.forEach(d => batch.push(deleteDoc(doc(db, 'projects', projectId, 'dateHistory', d.id))));
-      batch.push(deleteDoc(doc(db, 'publicShares', projectId)).catch(() => {}));
+      complaintsSnap.docs.forEach(d => batch.push(deleteDoc(doc(db, 'complaints', d.id))));
+      qcSnap.docs.forEach(d => batch.push(deleteDoc(doc(db, 'qc_reports', d.id))));
+      // publicShares is keyed by share TOKEN, not project ID — look up the
+      // current token via shareTokens before we can find the right doc.
+      const tokSnap = await getDoc(doc(db, 'shareTokens', projectId));
+      if (tokSnap.exists() && tokSnap.data().token) {
+        batch.push(deleteDoc(doc(db, 'publicShares', tokSnap.data().token)).catch(() => {}));
+      }
+      batch.push(deleteDoc(doc(db, 'shareTokens', projectId)).catch(() => {}));
       await Promise.all(batch);
       // Delete the project
       await deleteDoc(doc(db, 'projects', projectId));
       showToast('Project deleted');
       setTimeout(() => { window.location.href = 'dashboard.html'; }, 800);
     } catch(e) {
-      showToast('Error: ' + e.message);
+      showToast('Delete failed: ' + e.message);
+      alert('The delete did not complete:\n\n' + e.message + '\n\nSome records may have been removed and others not — please check before retrying.');
     }
   };
 
   window.closeModal = function(id) { document.getElementById(id).classList.remove('open'); };
 
   window.copyShareLink = async function() {
-    const url = window.location.origin + '/share.html?id=' + projectId;
-    // Make sure the public mirror exists / is current before handing out the
-    // link — covers projects created before this sync mechanism existed.
-    await syncPublicShare(projectId);
+    const token = await getOrCreateShareToken(projectId);
+    await syncPublicShare(projectId); // ensure the public data exists and is current
+    const url = window.location.origin + '/share.html?t=' + token;
     navigator.clipboard.writeText(url).then(function() {
       showToast('Share link copied — send to client');
     }).catch(function() {
       prompt('Copy this link and send to your client:', url);
     });
+  };
+
+  // Invalidates the current share link immediately (old URL stops working)
+  // and hands out a fresh one — for when a link was sent to the wrong
+  // person, or you just want a clean rotation.
+  window.revokeShareLink = async function() {
+    if (!confirm('Revoke the current share link? Anyone with the old link will immediately lose access, and a new link will be generated.')) return;
+    try {
+      const tokSnap = await getDoc(doc(db, 'shareTokens', projectId));
+      if (tokSnap.exists() && tokSnap.data().token) {
+        await updateDoc(doc(db, 'publicShares', tokSnap.data().token), { active: false }).catch(() => {});
+      }
+      await deleteDoc(doc(db, 'shareTokens', projectId)).catch(() => {});
+      const newToken = await getOrCreateShareToken(projectId);
+      await syncPublicShare(projectId);
+      const url = window.location.origin + '/share.html?t=' + newToken;
+      navigator.clipboard.writeText(url).then(function() {
+        showToast('Old link revoked — new link copied');
+      }).catch(function() {
+        prompt('Old link revoked. Copy the new link for your client:', url);
+      });
+    } catch (e) {
+      showToast('Revoke failed: ' + e.message);
+    }
   };
 
   window.signOut = async function() { await fbSignOut(auth); window.location.href = 'login.html'; };
@@ -1086,17 +1159,41 @@ ${(function(){
     return new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
   }
 
-  function esc(s) {
-    return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  // ── ACTIVITY LOG ──────────────────────────────────────────────────────────
+  // Generates a random, unguessable share token (32 hex-ish chars).
+  function generateShareToken() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID().replace(/-/g, '');
+    let s = '';
+    for (let i = 0; i < 32; i++) s += Math.floor(Math.random() * 36).toString(36);
+    return s;
   }
 
-  // ── ACTIVITY LOG ──────────────────────────────────────────────────────────
-  // Mirrors only the safe, customer-facing fields into a public collection
-  // (publicShares) that the no-login share page reads from — the real
-  // projects/items collections are never exposed to that page. Called after
-  // any write that could change what a client sees.
+  // Days a share link stays valid before it needs regenerating.
+  const SHARE_LINK_DAYS = 90;
+
+  // Returns the project's current active share token, creating one (and the
+  // shareTokens/{projectId} bookkeeping doc) if none exists yet. Doesn't
+  // create a publicShares doc by itself — syncPublicShare does that.
+  async function getOrCreateShareToken(projectId) {
+    const tokSnap = await getDoc(doc(db, 'shareTokens', projectId));
+    if (tokSnap.exists() && tokSnap.data().token) return tokSnap.data().token;
+    const token = generateShareToken();
+    await setDoc(doc(db, 'shareTokens', projectId), { token, createdAt: serverTimestamp() });
+    return token;
+  }
+
+  // Mirrors only the safe, customer-facing fields into publicShares/{token}
+  // — the no-login share page reads only from there, never the real
+  // projects/items collections. Does nothing if no share link has ever been
+  // generated for this project (no point creating public data nobody has a
+  // link to yet). Called after any write that could change what a client
+  // sees, plus once explicitly whenever a share link is copied.
   async function syncPublicShare(projectId) {
     try {
+      const tokSnap = await getDoc(doc(db, 'shareTokens', projectId));
+      if (!tokSnap.exists() || !tokSnap.data().token) return;
+      const token = tokSnap.data().token;
+
       const pSnap = await getDoc(doc(db, 'projects', projectId));
       if (!pSnap.exists()) return;
       const p = pSnap.data();
@@ -1113,10 +1210,19 @@ ${(function(){
           packingStatus: it.packingStatus || 'pending'
         };
       });
-      await setDoc(doc(db, 'publicShares', projectId), {
+
+      // Preserve the original expiry instead of pushing it out every time
+      // status changes — a link should expire on schedule, not just because
+      // the project stayed active.
+      const existing = await getDoc(doc(db, 'publicShares', token));
+      const expiresAt = existing.exists() && existing.data().expiresAt
+        ? existing.data().expiresAt
+        : new Date(Date.now() + SHARE_LINK_DAYS * 86400000);
+
+      await setDoc(doc(db, 'publicShares', token), {
         projectName: p.projectName || '', location: p.location || '', orderNo: p.orderNo || '',
         status: p.status || 'Not Started', handoverDate: p.handoverDate || '',
-        items: itemsList, updatedAt: serverTimestamp()
+        items: itemsList, active: true, expiresAt, updatedAt: serverTimestamp()
       });
     } catch (e) { console.error('publicShare sync failed', e); }
   }
@@ -1129,7 +1235,14 @@ ${(function(){
         uid: currentUser ? currentUser.uid : '',
         at: serverTimestamp()
       });
-    } catch(e) { console.error('Activity log write failed:', e.message); }
+    } catch(e) {
+      console.error('Activity log write failed:', e.message);
+      // The main save already succeeded by the time this runs — this is a
+      // secondary write, so a quiet toast is enough; it shouldn't block or
+      // alarm the user, but they should still know the audit trail may be
+      // incomplete for this change.
+      showToast('Saved, but the activity log entry failed — audit trail may be incomplete');
+    }
   }
 
   async function loadActivityLog() {

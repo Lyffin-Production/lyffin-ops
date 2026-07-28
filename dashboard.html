@@ -976,25 +976,14 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-  import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js';
-  import { getAuth, onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
+  import { onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
   import {
-    getFirestore, collection, addDoc, onSnapshot, query,
+    collection, addDoc, onSnapshot, query,
     orderBy, doc, getDoc, getDocs, serverTimestamp, setDoc
   } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
+  import { db, auth, esc, resolveUserDoc, initOfflineBanner } from './shared.js';
 
-  const firebaseConfig = {
-    apiKey:            "AIzaSyC0aoUyBCHn63-WkJnPFbDJLF0x1GFMyxU",
-    authDomain:        "lyffin-platform.firebaseapp.com",
-    projectId:         "lyffin-platform",
-    storageBucket:     "lyffin-platform.firebasestorage.app",
-    messagingSenderId: "618920465280",
-    appId:             "1:618920465280:web:11ba5583ff3f2b778a2765"
-  };
-
-  const app  = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db   = getFirestore(app);
+  initOfflineBanner();
 
   let currentUser = null;
   let currentRole = null;
@@ -1003,33 +992,12 @@
   let currentUserUID = '';
   let allProjects = [];
 
-  // Looks up the signed-in user's profile doc, self-provisioning from a
-  // matching admin-created invite on first sign-in (see login.html for the
-  // full explanation). Firestore rules only allow this self-create when the
-  // written role/name match the invite exactly.
-  async function resolveUserDoc(db, user) {
-    const snap = await getDoc(doc(db, 'users', user.uid));
-    if (snap.exists()) return snap.data();
-    if (user.email) {
-      try {
-        const inviteSnap = await getDoc(doc(db, 'pendingInvites', user.email));
-        if (inviteSnap.exists()) {
-          const invite = inviteSnap.data();
-          const userDoc = { name: invite.name || '', email: user.email, role: invite.role || 'sales' };
-          await setDoc(doc(db, 'users', user.uid), userDoc);
-          return userDoc;
-        }
-      } catch (e) { /* fall through to default */ }
-    }
-    return {};
-  }
-
   // ── AUTH GUARD ────────────────────────────────────────────────────────────
   onAuthStateChanged(auth, async (user) => {
     if (!user) { window.location.href = 'login.html'; return; }
 
     currentUser = user;
-    const data = await resolveUserDoc(db, user);
+    const data = await resolveUserDoc(user, 'sales');
     currentRole = data.role || 'sales';
     currentUserUID = user.uid;
     currentUserEmail = user.email;
@@ -1411,8 +1379,6 @@
       }).join('');
     });
   }
-
-  function esc(s) { return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
   window.signOut = async function() {
     await fbSignOut(auth);
