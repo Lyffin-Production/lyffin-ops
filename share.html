@@ -255,15 +255,21 @@ function renderProject(project, items) {
       .sort((a,b) => { const na=parseInt(a.productNo)||0, nb=parseInt(b.productNo)||0; return na!==nb ? na-nb : (a.name||'').localeCompare(b.name||''); })
       .map(item => {
         const label = (item.overallStatus || 'Structure').replace(' (In Progress)',' · In progress');
+        const badgeHtml = item.onHold
+          ? '<span class="status-badge" style="font-size:11px;padding:4px 12px;background:#fef3c7;color:#92400e">On hold</span>'
+          : '<span class="status-badge ' + itemBadgeClass(item.overallStatus) + '" style="font-size:11px;padding:4px 12px">' + esc(label) + '</span>';
+        const holdNote = (item.onHold && item.holdReason)
+          ? '<div class="item-row-meta" style="color:#92400e">' + esc(item.holdReason) + '</div>' : '';
         return '<div class="item-row">' +
           '<div class="item-row-head">' +
             '<div class="item-row-name" style="display:flex;align-items:center;gap:10px">' +
               (item.thumbnail ? '<img src="' + item.thumbnail + '" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0" alt="">' : '') +
               '<span>' + (item.productNo ? '<span class="item-no">#' + esc(item.productNo) + '</span> ' : '') + esc(item.name||'Item') + '</span>' +
             '</div>' +
-            '<span class="status-badge ' + itemBadgeClass(item.overallStatus) + '" style="font-size:11px;padding:4px 12px">' + esc(label) + '</span>' +
+            badgeHtml +
           '</div>' +
           '<div class="item-row-meta">Qty: ' + (item.qty||1) + (item.area ? ' · ' + esc(item.area) : '') + (item.dimensions ? ' · ' + esc(item.dimensions) : '') + '</div>' +
+          holdNote +
           '<div class="stage-pills">' + itemStagePills(item) + '</div>' +
         '</div>';
       }).join('')

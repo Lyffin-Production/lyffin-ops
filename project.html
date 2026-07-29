@@ -437,6 +437,12 @@
   let complaints = [];
   let activeTab = params.get('tab') || 'overview';
 
+  // Items dropped in a later revision are flagged `removed` rather than
+  // deleted (see the listing tool's push logic) — kept for the audit trail
+  // but excluded everywhere active work, counts, and readiness are shown.
+  function activeItems() { return items.filter(i => !i.removed); }
+  function removedItems() { return items.filter(i => i.removed); }
+
   // ── AUTH ──────────────────────────────────────────────────────────────────
   onAuthStateChanged(auth, async (user) => {
     if (!user) { window.location.href = 'login.html'; return; }
@@ -574,7 +580,7 @@
       <!-- Tabs -->
       <div class="tabs" id="tabs-container">
         <div class="tab${activeTab==='overview'?' active':''}" onclick="switchTab('overview', this)">Overview</div>
-        <div class="tab${activeTab==='items'?' active':''}" onclick="switchTab('items', this)">Production items (${items.length})</div>
+        <div class="tab${activeTab==='items'?' active':''}" onclick="switchTab('items', this)">Production items (${activeItems().length})</div>
         <div class="tab${activeTab==='edit'?' active':''}" onclick="switchTab('edit', this)">Edit project</div>
         <div class="tab${activeTab==='complaints'?' active':''}" onclick="switchTab('complaints', this)">Complaints (${complaints.length})</div>
         <div class="tab${activeTab==='notes'?' active':''}" onclick="switchTab('notes', this)">Notes</div>
@@ -629,8 +635,8 @@
 
   // ── OVERVIEW TAB ──────────────────────────────────────────────────────────
   function renderOverview() {
-    const totalItems = items.length;
-    const readyItems = items.filter(i => i.overallStatus === 'Ready').length;
+    const totalItems = activeItems().length;
+    const readyItems = activeItems().filter(i => i.overallStatus === 'Ready').length;
     const openComplaints = complaints.filter(c => c.status !== 'Resolved').length;
     const pct = totalItems ? Math.round(readyItems / totalItems * 100) : 0;
 
@@ -680,13 +686,14 @@
 
   // ── ITEMS TAB ─────────────────────────────────────────────────────────────
   function renderItems() {
-    if (!items.length) return `<div class="section-card"><div class="empty-small">No items pushed from Factory Listing Tool yet.</div></div>`;
+    const active = activeItems();
+    const removed = removedItems();
+    if (!active.length && !removed.length) return `<div class="section-card"><div class="empty-small">No items pushed from Factory Listing Tool yet.</div></div>`;
 
     const STAGES = ['carpentry','polish','upholstery','packing'];
     const LABELS = { carpentry:'Structure', polish:'Polish', upholstery:'Upholstery', packing:'Packing' };
 
-    return `
-      <div class="section-card">
+    const activeTableHtml = !active.length ? `<div class="empty-small">No active items — see removed items below.</div>` : `
         <table>
           <thead><tr>
             <th>#</th>
@@ -700,12 +707,15 @@
             <th>Packing</th>
             <th>Status</th>
           </tr></thead>
-          <tbody>${items.map((item, i) => {
+          <tbody>${active.map((item, i) => {
             const _ovs2 = item.overallStatus || 'Structure';
             const statusClass = _ovs2.includes('(In Progress)')
               ? 'badge-' + _ovs2.replace(' (In Progress)','').toLowerCase() + '-inprogress'
               : 'badge-' + _ovs2.toLowerCase().replace(/[^a-z0-9]+/g,'-');
-            return `<tr>
+            const statusCellHtml = item.onHold
+              ? `<span class="badge" style="font-size:11px;background:#fef3c7;color:#92400e">⏸ On Hold</span>${item.holdReason?`<div style="font-size:11px;color:var(--ink-3);margin-top:2px">${esc(item.holdReason)}</div>`:''}`
+              : `<span class="badge ${statusClass}" style="font-size:11px">${esc((item.overallStatus||'Structure').replace(' (In Progress)',' ▶'))}</span>`;
+            return `<tr${item.onHold?' style="background:#fffbeb"':''}>
               <td style="color:var(--ink-3);font-size:12px">${esc(item.productNo || (i+1))}</td>
               <td><div style="display:flex;align-items:center;gap:8px">${item.thumbnail ? `<img src="${item.thumbnail}" style="width:32px;height:32px;object-fit:cover;border-radius:5px;border:1px solid var(--border);flex-shrink:0" alt="">` : ''}<strong>${esc(item.name||'—')}</strong></div></td>
               <td>${item.qty||1}</td>
@@ -720,11 +730,26 @@ ${(function(){
                   return '<td><span class="stage-pill sp-pending">'+lbl+'</span></td>';
                 }).join('');
               })()}
-              <td><span class="badge ${statusClass}" style="font-size:11px">${(item.overallStatus||'Structure').replace(' (In Progress)',' ▶')}</span></td>
+              <td>${statusCellHtml}</td>
             </tr>`;
           }).join('')}</tbody>
+        </table>`;
+
+    const removedHtml = removed.length ? `
+      <div class="section-card" style="margin-top:16px">
+        <div class="section-header"><div class="section-title">Removed items (${removed.length})</div></div>
+        <div class="empty-small" style="text-align:left;padding:8px 20px 4px;color:var(--ink-3)">Dropped in a later revision from the Factory Listing Tool. Kept here for reference only — not counted in production.</div>
+        <table>
+          <tbody>${removed.map(item => `<tr style="opacity:.6">
+              <td style="width:36px;color:var(--ink-3);font-size:12px">${esc(item.productNo||'')}</td>
+              <td><strong style="text-decoration:line-through">${esc(item.name||'—')}</strong></td>
+              <td style="font-size:11px;color:var(--ink-3)">Removed ${item.removedAt && item.removedAt.toDate ? item.removedAt.toDate().toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) : ''}</td>
+            </tr>`).join('')}</tbody>
         </table>
-      </div>`;
+      </div>` : '';
+
+    return `
+      <div class="section-card">${activeTableHtml}</div>${removedHtml}`;
   }
 
   // ── EDIT TAB ──────────────────────────────────────────────────────────────
@@ -829,10 +854,10 @@ ${(function(){
 
     // ── Status workflow guards ─────────────────────────────────────────
     if (newStatus !== oldStatus) {
-      const unfinished = items.filter(i => i.overallStatus !== 'Ready');
+      const unfinished = activeItems().filter(i => i.overallStatus !== 'Ready');
       if ((newStatus === 'Delivered' || newStatus === 'Completed') && unfinished.length) {
         alert('Can\'t mark this ' + newStatus + ' — ' + unfinished.length + ' item(s) are not yet Ready:\n' +
-          unfinished.slice(0, 8).map(i => '• ' + (i.name || 'item')).join('\n') +
+          unfinished.slice(0, 8).map(i => '• ' + (i.name || 'item') + (i.onHold ? '  [ON HOLD' + (i.holdReason ? ': ' + i.holdReason : '') + ']' : '')).join('\n') +
           (unfinished.length > 8 ? '\n…and ' + (unfinished.length - 8) + ' more' : '') +
           '\n\nUse the Delivery checklist once every item is ready, or update items in Factory first.');
         return;
@@ -939,11 +964,11 @@ ${(function(){
     const LABELS = {carpentry:'Structure',polish:'Polish',upholstery:'Upholstery',packing:'Packing'};
     const COLORS = {carpentry:'#d97706',polish:'#3b82f6',upholstery:'#0ea5e9',packing:'#10b981'};
 
-    if (!items.length) return '<div class="section-card"><div class="empty-small">No items pushed yet.</div></div>';
+    if (!activeItems().length) return '<div class="section-card"><div class="empty-small">No items pushed yet.</div></div>';
 
     // Stage summary
     const stageSummary = STAGES.map(stage => {
-      const valid = items.filter(i => i[stage + 'Status'] !== 'na');
+      const valid = activeItems().filter(i => i[stage + 'Status'] !== 'na');
       const done = valid.filter(i => i[stage + 'Status'] === 'done').length;
       return {stage, label: LABELS[stage], total: valid.length, done, color: COLORS[stage]};
     });
@@ -962,7 +987,7 @@ ${(function(){
     '</div>';
 
     // Items checklist
-    const itemRows = items.map(item => {
+    const itemRows = activeItems().map(item => {
       const validStages = STAGES.filter(s => item[s + 'Status'] !== 'na');
       const stagePills = validStages.map(stage => {
         const done = item[stage + 'Status'] === 'done';
@@ -972,13 +997,17 @@ ${(function(){
           (done ? '&#10003; ' : '') + LABELS[stage] + '</span>';
       }).join('');
       const isReady = item.overallStatus === 'Ready';
-      return '<tr style="background:' + (isReady ? '#f0fdf4' : 'transparent') + '">' +
+      const rowBg = item.onHold ? '#fffbeb' : (isReady ? '#f0fdf4' : 'transparent');
+      const statusHtml = item.onHold
+        ? '<span style="color:#92400e;font-weight:500;font-size:12px">⏸ On hold' + (item.holdReason ? '<br><span style="font-weight:400;font-size:11px">' + esc(item.holdReason) + '</span>' : '') + '</span>'
+        : (isReady ? '<span style="color:#16a34a;font-weight:500;font-size:13px">&#10003; Ready</span>' : '<span style="color:var(--ink-3);font-size:12px">In progress</span>');
+      return '<tr style="background:' + rowBg + '">' +
         '<td style="padding:10px 16px;font-weight:500"><div style="display:flex;align-items:center;gap:8px">' + (item.thumbnail ? '<img src="' + item.thumbnail + '" style="width:30px;height:30px;object-fit:cover;border-radius:5px;border:1px solid var(--border);flex-shrink:0" alt="">' : '') + '<span>' + (item.productNo ? '<span style="color:var(--ink-3);font-weight:400">#' + esc(item.productNo) + '</span> ' : '') + esc(item.name||'—') + '</span></div></td>' +
         '<td style="padding:10px 16px;font-size:12px;color:var(--ink-3)">Qty: ' + (item.qty||1) + (item.area ? ' · ' + esc(item.area) : '') + (item.details ? '<br><span style="font-style:italic">' + esc(item.details) + '</span>' : '') +
         ((item.finishes && item.finishes.filter(Boolean).length) ? '<br>Finish: ' + item.finishes.filter(Boolean).map(esc).join(', ') : '') +
         ((item.upholstery && item.upholstery.filter(Boolean).length) ? '<br>Upholstery: ' + item.upholstery.filter(Boolean).map(esc).join(', ') : '') + '</td>' +
         '<td style="padding:10px 16px"><div style="display:flex;gap:4px;flex-wrap:wrap">' + stagePills + '</div></td>' +
-        '<td style="padding:10px 16px;text-align:center">' + (isReady ? '<span style="color:#16a34a;font-weight:500;font-size:13px">&#10003; Ready</span>' : '<span style="color:var(--ink-3);font-size:12px">In progress</span>') + '</td>' +
+        '<td style="padding:10px 16px;text-align:center">' + statusHtml + '</td>' +
       '</tr>';
     }).join('');
 
@@ -1231,10 +1260,10 @@ ${(function(){
       showToast('Please complete the delivery checklist');
       return;
     }
-    const unfinished = items.filter(i => i.overallStatus !== 'Ready');
+    const unfinished = activeItems().filter(i => i.overallStatus !== 'Ready');
     if (unfinished.length) {
       alert('Can\'t confirm delivery — ' + unfinished.length + ' item(s) are not yet Ready:\n' +
-        unfinished.slice(0, 8).map(i => '• ' + (i.name || 'item')).join('\n') +
+        unfinished.slice(0, 8).map(i => '• ' + (i.name || 'item') + (i.onHold ? '  [ON HOLD' + (i.holdReason ? ': ' + i.holdReason : '') + ']' : '')).join('\n') +
         (unfinished.length > 8 ? '\n…and ' + (unfinished.length - 8) + ' more' : '') +
         '\n\nUpdate them in Factory first.');
       return;
@@ -1413,17 +1442,21 @@ ${(function(){
 
       // Each item is its own small document (including its thumbnail, if
       // any) rather than one big array — see the comment in firestore.rules
-      // for why. Mirror the current set exactly: write/update every real
-      // item, then remove any mirrored item that no longer exists on the
-      // real project (e.g. it was deleted there).
+      // for why. Mirror the current set exactly: write/update every real,
+      // non-removed item, then remove any mirrored item that's no longer
+      // current — either genuinely deleted, or flagged `removed` after
+      // being dropped in a later revision (clients shouldn't see a product
+      // that's no longer actually part of their order).
       const currentIds = new Set();
       for (const d of itemsSnap.docs) {
         const it = d.data();
+        if (it.removed) continue;
         currentIds.add(d.id);
         await setDoc(doc(db, 'publicShares', token, 'items', d.id), {
           name: it.name || '', productNo: it.productNo || '', qty: it.qty || 1,
           area: it.area || '', dimensions: it.dimensions || '',
           thumbnail: it.thumbnail || null,
+          onHold: !!it.onHold, holdReason: it.holdReason || '',
           overallStatus: it.overallStatus || 'Structure',
           carpentryStatus: it.carpentryStatus || 'pending',
           polishStatus: it.polishStatus || 'pending',

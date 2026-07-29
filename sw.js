@@ -1,4 +1,4 @@
-const CACHE = 'lyffin-ops-v1785256081';
+const CACHE = 'lyffin-ops-v1785325822';
 const FILES = [
   'login.html',
   'dashboard.html',

@@ -66,6 +66,9 @@ body{font-family:var(--font-sans);background:var(--surface);color:var(--ink);min
 .items-table tr:last-child td{border-bottom:none}
 .item-name{font-weight:500;font-size:14px}
 .item-meta{font-size:12px;color:var(--ink-3);margin-top:2px}
+.hold-banner{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;padding:6px 10px;border-radius:8px;background:#fef3c7;color:#92400e;border:1px solid #fde68a}
+.ob-hold{background:#fef3c7;color:#92400e}
+tr.item-held{background:#fffbeb}
 .stages{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .sp{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border-radius:20px;font-size:12px;font-weight:500;font-family:var(--font-sans);cursor:pointer;border:1.5px solid var(--border);background:var(--white);color:var(--ink-3);transition:all .15s;white-space:nowrap}
 .sp:hover{border-color:var(--ink-3);color:var(--ink-2)}
@@ -383,7 +386,9 @@ function render() {
 
 function renderCard(d) {
   const project = d.project;
-  const items = d.items;
+  const allItems = d.items;
+  const items = allItems.filter(function(i) { return !i.removed; });
+  const removedCount = allItems.length - items.length;
   const total = items.length;
   const ready = items.filter(function(i) { return i.overallStatus === 'Ready'; }).length;
   const pct = total ? Math.round(ready / total * 100) : 0;
@@ -397,7 +402,7 @@ function renderCard(d) {
         '<svg class="chevron ' + (isOpen?'open':'') + '" id="chv-' + pid + '" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg>' +
         '<div>' +
           '<div class="project-name">' + esc(project.projectName||'') + '</div>' +
-          '<div class="project-meta">' + esc(project.location||'') + ' · ' + total + ' items</div>' +
+          '<div class="project-meta">' + esc(project.location||'') + ' · ' + total + ' items' + (removedCount ? ' <span style="color:var(--ink-3)">(' + removedCount + ' removed)</span>' : '') + '</div>' +
         '</div>' +
       '</div>' +
       '<div class="progress-wrap">' +
@@ -484,7 +489,23 @@ function renderRow(projectId, item) {
   '</button>' +
   (item.remark ? '<div class="remark-saved">' + esc(item.remark) + '</div>' : '');
 
-  return '<tr>' +
+  // On-hold state pauses this ONE item without affecting the rest of the
+  // project — the stage buttons are replaced with a hold notice so nobody
+  // accidentally progresses it while it's meant to be paused, and the
+  // underlying stage statuses are left exactly as they were so Resume picks
+  // up right where it left off.
+  const isHeld = !!item.onHold;
+  const stagesCellHtml = isHeld
+    ? '<div class="hold-banner">⏸ On hold' + (item.holdReason ? ': ' + esc(item.holdReason) : '') + '</div>'
+    : '<div class="stages">' + pills + '</div>';
+  const overallBadgeHtml = isHeld
+    ? '<span class="overall-badge ob-hold">On Hold</span>'
+    : '<span class="overall-badge ' + obCls + '">' + (item.overallStatus||'Structure').replace(' (In Progress)',' ▶') + '</span>';
+  const holdBtnHtml = isHeld
+    ? '<button onclick="resumeItem(\'' + projectId + '\',\'' + item.id + '\',this)" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid #16a34a;background:#f0fdf4;color:#15803d;cursor:pointer;white-space:nowrap;margin-top:4px;display:block">▶ Resume</button>'
+    : '<button onclick="holdItemPrompt(\'' + projectId + '\',\'' + item.id + '\',this)" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--ink-3);cursor:pointer;white-space:nowrap;margin-top:4px;display:block">⏸ Hold</button>';
+
+  return '<tr' + (isHeld ? ' class="item-held"' : '') + '>' +
     '<td>' +
       '<div style="display:flex;gap:10px;align-items:flex-start">' +
       (item.thumbnail ? '<img src="' + item.thumbnail + '" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0" alt="">' : '') +
@@ -497,9 +518,9 @@ function renderRow(projectId, item) {
       auditHtml +
       '</div></div>' +
     '</td>' +
-    '<td><div class="stages">' + pills + '</div></td>' +
-    '<td><span class="overall-badge ' + obCls + '">' + (item.overallStatus||'Structure').replace(' (In Progress)',' ▶') + '</span></td>' +
-    '<td>' + remarkHtml + '</td>' +
+    '<td>' + stagesCellHtml + '</td>' +
+    '<td>' + overallBadgeHtml + '</td>' +
+    '<td>' + remarkHtml + holdBtnHtml + '</td>' +
   '</tr>';
 }
 
@@ -535,17 +556,21 @@ async function syncPublicShare(projectId) {
 
     // Each item is its own small document (including its thumbnail, if any)
     // rather than one big array — see the comment in firestore.rules for
-    // why. Mirror the current set exactly: write/update every real item,
-    // then remove any mirrored item that no longer exists on the real
-    // project (e.g. it was deleted there).
+    // why. Mirror the current set exactly: write/update every real,
+    // non-removed item, then remove any mirrored item that's no longer
+    // current — either genuinely deleted, or flagged `removed` after being
+    // dropped in a later revision (clients shouldn't see a product that's
+    // no longer actually part of their order).
     const currentIds = new Set();
     for (const d of itemsSnap.docs) {
       const it = d.data();
+      if (it.removed) continue;
       currentIds.add(d.id);
       await setDoc(doc(db, 'publicShares', token, 'items', d.id), {
         name: it.name || '', productNo: it.productNo || '', qty: it.qty || 1,
         area: it.area || '', dimensions: it.dimensions || '',
         thumbnail: it.thumbnail || null,
+        onHold: !!it.onHold, holdReason: it.holdReason || '',
         overallStatus: it.overallStatus || 'Structure',
         carpentryStatus: it.carpentryStatus || 'pending',
         polishStatus: it.polishStatus || 'pending',
@@ -754,6 +779,45 @@ window.markNA = async function(projectId, itemId, stage, btn) {
   finally { btn.disabled = false; }
 };
 
+// Pauses ONE item without affecting anything else in the project — the
+// stage it's currently at is left exactly as-is so Resume picks up right
+// where it stopped. Common case: waiting on a specific fabric/material for
+// just this piece while the rest of the order keeps moving.
+window.holdItemPrompt = async function(projectId, itemId, btn) {
+  if (btn.disabled) return;
+  const reason = prompt('Why is this item on hold? (optional, but helpful for anyone else looking at it)') || '';
+  btn.disabled = true;
+  try {
+    await updateDoc(doc(db, 'projects', projectId, 'items', itemId), {
+      onHold: true,
+      holdReason: reason.trim(),
+      heldBy: currentUserName,
+      heldAt: serverTimestamp()
+    });
+    await syncPublicShare(projectId);
+    await logActivity(projectId, currentUserName + ' put an item on hold' + (reason.trim() ? ' — ' + reason.trim() : ''));
+    showToast('Item put on hold');
+  } catch(e) { showToast('Error: ' + e.message); }
+  finally { btn.disabled = false; }
+};
+
+window.resumeItem = async function(projectId, itemId, btn) {
+  if (btn.disabled) return;
+  btn.disabled = true;
+  try {
+    await updateDoc(doc(db, 'projects', projectId, 'items', itemId), {
+      onHold: false,
+      holdReason: '',
+      resumedBy: currentUserName,
+      resumedAt: serverTimestamp()
+    });
+    await syncPublicShare(projectId);
+    await logActivity(projectId, currentUserName + ' resumed an item that was on hold');
+    showToast('Item resumed');
+  } catch(e) { showToast('Error: ' + e.message); }
+  finally { btn.disabled = false; }
+};
+
 // ── REMARK MODAL ──────────────────────────────────────────────────────────
 window.openRemarkModal = function(projectId, itemId, itemName) {
   _remarkProjectId = projectId;
@@ -804,9 +868,11 @@ window.bulkUpdateStatus = async function() {
         const snap = await getDocs(collection(db, 'projects', projectId, 'items'));
         projItems = snap.docs.map(d => d.data());
       }
-      const unfinished = projItems.filter(i => i.overallStatus !== 'Ready');
+      const unfinished = projItems.filter(i => !i.removed && i.overallStatus !== 'Ready');
       if (unfinished.length) {
-        alert('Can\'t mark "' + projName + '" ' + newStatus + ' — ' + unfinished.length + ' item(s) are not yet Ready. Update them below first.');
+        const heldCount = unfinished.filter(i => i.onHold).length;
+        alert('Can\'t mark "' + projName + '" ' + newStatus + ' — ' + unfinished.length + ' item(s) are not yet Ready' +
+          (heldCount ? ' (' + heldCount + ' on hold)' : '') + '. Update them below first.');
         return;
       }
     } else if (!isValidTransition(oldStatus, newStatus)) {
