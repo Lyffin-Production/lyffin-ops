@@ -800,6 +800,8 @@
   .lc-pc{font-size:11px;color:var(--ink-3)}
   .lc-comp{font-weight:600;color:var(--ink);white-space:nowrap}
   .lc-runs{font-size:11px;color:var(--ink-3);margin-top:2px}
+  .lc-progress-bar{width:90px;height:5px;background:var(--surface-2);border-radius:3px;overflow:hidden}
+  .lc-progress-fill{height:100%;background:var(--gold);border-radius:3px}
   .lc-store{font-size:11px;color:#a8851f;margin-top:2px}
   .lc-pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;margin-top:3px;white-space:nowrap}
   .lc-pill.ok{background:var(--s-packing);color:#14532d}
@@ -882,7 +884,7 @@
           <h3>Capacity settings</h3>
           <label class="lc-lab">Monthly production output</label>
           <input id="lc-cap" class="lc-inp" type="number" min="1" value="40">
-          <div class="lc-hint">Your true throughput, in lakhs. 100 over 3 months ≈ 33/mo.</div>
+          <div class="lc-hint">Your true throughput, in production units. 100 over 3 months ≈ 33/mo.</div>
 
           <label class="lc-lab">Working days per month</label>
           <input id="lc-wd" class="lc-inp" type="number" min="1" max="31" value="26">
@@ -917,7 +919,7 @@
           <h3>Quote a new project</h3>
           <label class="lc-lab">Order date</label>
           <input id="lc-quoteOrder" class="lc-inp" type="date">
-          <label class="lc-lab">Project value</label>
+          <label class="lc-lab">Project units</label>
           <input id="lc-quoteVal" class="lc-inp" type="number" min="1" placeholder="e.g. 22">
           <label class="lc-lab">Client's requested handover (optional)</label>
           <input id="lc-quoteReq" class="lc-inp" type="date">
@@ -961,7 +963,8 @@
               <th style="width:20px">#</th>
               <th>Project / location</th>
               <th style="width:64px">Ordered</th>
-              <th class="r" style="width:76px">Value</th>
+              <th class="r" style="width:76px">Units</th>
+              <th style="width:110px" title="How much of the units already produced, and how much is actually left to schedule">Progress</th>
               <th class="c" style="width:52px" title="Build as early as possible and hold in the warehouse">Early</th>
               <th style="width:64px">Wanted</th>
               <th style="width:190px">Delivery / status</th>
@@ -1096,7 +1099,9 @@
       const od = parseYMD(p.orderDate);
       let s0 = od ? dayDiff(base, od) : 0;
       if(s0 < 0) s0 = 0;
-      const val = p.value > 0 ? p.value : 0;
+      // Schedule what's actually LEFT, not the full order value regardless
+      // of how much is already built (see computeCompletion in loadAll).
+      const val = p.remaining > 0 ? p.remaining : 0;
       return {
         p, rem: val, startIdx: s0, first: null, last: null,
         maxPerDay: val > 0 ? val / minD : 0    // spreads the job over >= minD days
@@ -1212,6 +1217,31 @@
   function num(v){ if(v==null||isNaN(v)) return '—'; v=Math.round(v*10)/10; return String(Number.isInteger(v)?v:v.toFixed(1)); }
 
   /* ── data ──────────────────────────────────────────────────────────── */
+  // Turns a project's actual items into a 0..1 completion fraction — the
+  // average, across active (non-removed) items, of how many of that item's
+  // applicable stages (excluding any marked N/A) are actually done. This is
+  // deliberately more forgiving than the simple Ready/not-Ready count used
+  // elsewhere in Ops: an item that's finished Structure+Polish but not
+  // Upholstery+Packing counts as half-done here, not zero — because it
+  // genuinely is half-done, and scheduling should reflect that.
+  function computeCompletion(items){
+    const active = (items||[]).filter(function(i){ return !i.removed; });
+    if(!active.length) return 0;
+    let sum = 0;
+    active.forEach(function(it){
+      var stages = ['carpentryStatus','polishStatus','upholsteryStatus','packingStatus'];
+      var applicable = 0, done = 0;
+      stages.forEach(function(s){
+        var st = it[s];
+        if(st === 'na') return;
+        applicable++;
+        if(st === 'done') done++;
+      });
+      sum += applicable > 0 ? done/applicable : 0;
+    });
+    return sum / active.length;
+  }
+
   async function loadAll(){
     try{
       const cs = await getDoc(doc(db,'config','capacity'));
@@ -1232,17 +1262,37 @@
       fs.forEach(d => { const v=d.data(); fin[d.id] = { value:Number(v.value)||0, early: !!v.early }; });
     }catch(e){}
     const ps = await getDocs(collection(db,'projects'));
-    projects = [];
+    const active = [];
     ps.forEach(d => {
       const x = d.data();
       if(DONE.indexOf(x.status) >= 0) return;
-      projects.push({
-        id:d.id, name:x.projectName||'(unnamed)', client:x.location||'',
+      active.push({ id:d.id, x });
+    });
+
+    // Pull each active project's real items so scheduling can be based on
+    // what's actually LEFT to build, not the full order value regardless of
+    // how much of it is already done. One extra read per active project —
+    // fine at this tool's scale (an admin planning view, not a hot path).
+    const itemsByProject = {};
+    await Promise.all(active.map(async ({id}) => {
+      try{
+        const isnap = await getDocs(collection(db,'projects',id,'items'));
+        itemsByProject[id] = isnap.docs.map(d => d.data());
+      }catch(e){ itemsByProject[id] = []; }
+    }));
+
+    projects = active.map(({id,x}) => {
+      const totalValue = (fin[id]&&fin[id].value)||0;
+      const completion = computeCompletion(itemsByProject[id]);
+      return {
+        id, name:x.projectName||'(unnamed)', client:x.location||'',
         status:x.status||'', orderDate:x.orderDate||'', requested:x.handoverDate||'',
-        value: (fin[d.id]&&fin[d.id].value)||0,
-        early: !!(fin[d.id]&&fin[d.id].early),
+        value: totalValue,
+        completion: completion,                          // 0..1, for display
+        remaining: Math.max(0, totalValue * (1 - completion)),  // what scheduling actually uses
+        early: !!(fin[id]&&fin[id].early),
         createdAt:(x.createdAt&&x.createdAt.seconds)?x.createdAt.seconds:0
-      });
+      };
     });
   }
   const saveValue = (id,val) => setDoc(doc(db,'projectFinance',id), {value:val}, {merge:true});
@@ -1358,11 +1408,17 @@
         ? '<div class="lc-runs">runs '+fmtDate(r.start)+' → '+fmtDate(r.finish)+'</div>' : '';
       const tgt = targetDate(p);
       const tgtNote = (!p.early && tgt) ? '<div class="lc-runs">aim: '+fmtDate(tgt)+'</div>' : '';
+      const pct = Math.round((p.completion||0)*100);
+      const progressHtml = !hasVal ? '<span class="lc-muted">—</span>'
+        : (pct > 0
+            ? '<div class="lc-progress-bar"><div class="lc-progress-fill" style="width:'+pct+'%"></div></div><div class="lc-runs">'+pct+'% done · '+lakhFmt(p.remaining)+' left</div>'
+            : '<span class="lc-muted">not started</span>');
       rows += '<tr'+(p.early?' class="lc-earlyrow"':'')+'>'+
         '<td class="lc-idx">'+(i+1)+'</td>'+
         '<td><div class="lc-pn">'+esc(p.name)+'</div><div class="lc-pc">'+esc(p.client)+' · '+esc(p.status)+'</div></td>'+
         '<td class="lc-dt">'+fmtShort(p.orderDate)+'</td>'+
         '<td class="r"><input class="lc-vinput" type="number" min="0" step="0.5" data-id="'+p.id+'" value="'+(hasVal?p.value:'')+'" placeholder="—"></td>'+
+        '<td>'+progressHtml+'</td>'+
         '<td class="c"><input class="lc-early" type="checkbox" data-id="'+p.id+'"'+(p.early?' checked':'')+' title="Build as early as possible and hold in the warehouse"></td>'+
         '<td class="lc-dt">'+fmtShort(p.requested)+'</td>'+
         '<td>'+(hasVal&&r.finish?'<div class="lc-comp">'+fmtDate(r.finish)+(r.overflow?' <span class="lc-red">(beyond horizon)</span>':'')+'</div>':'')+
@@ -1382,7 +1438,7 @@
       el.className='lc-qr lc-muted'; el.textContent='Enter a value above.'; return;
     }
     const od = quoteOrder || todayStr();
-    const hyp = { id:'__q', name:'quote', client:'', status:'', orderDate:od, requested:quoteReq||'', value:quoteVal, createdAt:0 };
+    const hyp = { id:'__q', name:'quote', client:'', status:'', orderDate:od, requested:quoteReq||'', value:quoteVal, remaining:quoteVal, completion:0, createdAt:0 };
     const alloc = allocate(projects.concat([hyp]));
     let r=null; for(const x of alloc.result){ if(x.p.id==='__q'){ r=x; break; } }
     const st = statusFor(r);
@@ -1434,7 +1490,8 @@
     }
     if(!t.classList.contains('lc-vinput')) return;
     const id=t.dataset.id, val=Math.max(0,+t.value||0);
-    const p=projects.find(x=>x.id===id); if(p){ p.value=val; render(); }
+    const p=projects.find(x=>x.id===id);
+    if(p){ p.value=val; p.remaining=Math.max(0, val * (1 - (p.completion||0))); render(); }
     saveValue(id,val).catch(err=>console.error('save value failed',err));
   });
 
