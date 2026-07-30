@@ -1244,56 +1244,68 @@
 
   async function loadAll(){
     try{
-      const cs = await getDoc(doc(db,'config','capacity'));
-      if(cs.exists()){
-        const d = cs.data();
-        if(typeof d.monthlyOutput==='number') cfg.capacity = d.monthlyOutput;
-        if(typeof d.bufferPct==='number')     cfg.buffer   = d.bufferPct;
-        if(typeof d.workDays==='number')      cfg.workDays = d.workDays;
-        if(typeof d.wip==='number')           cfg.wip      = d.wip;
-        if(typeof d.leadDays==='number')      cfg.leadDays = d.leadDays;
-        if(typeof d.minDays==='number')       cfg.minDays  = d.minDays;
-        if(typeof d.sundayOff==='boolean')    cfg.sundayOff = d.sundayOff;
-      }
-    }catch(e){}
-    const fin = {};
-    try{
-      const fs = await getDocs(collection(db,'projectFinance'));
-      fs.forEach(d => { const v=d.data(); fin[d.id] = { value:Number(v.value)||0, early: !!v.early }; });
-    }catch(e){}
-    const ps = await getDocs(collection(db,'projects'));
-    const active = [];
-    ps.forEach(d => {
-      const x = d.data();
-      if(DONE.indexOf(x.status) >= 0) return;
-      active.push({ id:d.id, x });
-    });
-
-    // Pull each active project's real items so scheduling can be based on
-    // what's actually LEFT to build, not the full order value regardless of
-    // how much of it is already done. One extra read per active project —
-    // fine at this tool's scale (an admin planning view, not a hot path).
-    const itemsByProject = {};
-    await Promise.all(active.map(async ({id}) => {
       try{
-        const isnap = await getDocs(collection(db,'projects',id,'items'));
-        itemsByProject[id] = isnap.docs.map(d => d.data());
-      }catch(e){ itemsByProject[id] = []; }
-    }));
+        const cs = await getDoc(doc(db,'config','capacity'));
+        if(cs.exists()){
+          const d = cs.data();
+          if(typeof d.monthlyOutput==='number') cfg.capacity = d.monthlyOutput;
+          if(typeof d.bufferPct==='number')     cfg.buffer   = d.bufferPct;
+          if(typeof d.workDays==='number')      cfg.workDays = d.workDays;
+          if(typeof d.wip==='number')           cfg.wip      = d.wip;
+          if(typeof d.leadDays==='number')      cfg.leadDays = d.leadDays;
+          if(typeof d.minDays==='number')       cfg.minDays  = d.minDays;
+          if(typeof d.sundayOff==='boolean')    cfg.sundayOff = d.sundayOff;
+        }
+      }catch(e){ console.error('loadAll: config read failed', e); }
 
-    projects = active.map(({id,x}) => {
-      const totalValue = (fin[id]&&fin[id].value)||0;
-      const completion = computeCompletion(itemsByProject[id]);
-      return {
-        id, name:x.projectName||'(unnamed)', client:x.location||'',
-        status:x.status||'', orderDate:x.orderDate||'', requested:x.handoverDate||'',
-        value: totalValue,
-        completion: completion,                          // 0..1, for display
-        remaining: Math.max(0, totalValue * (1 - completion)),  // what scheduling actually uses
-        early: !!(fin[id]&&fin[id].early),
-        createdAt:(x.createdAt&&x.createdAt.seconds)?x.createdAt.seconds:0
-      };
-    });
+      const fin = {};
+      try{
+        const fs = await getDocs(collection(db,'projectFinance'));
+        fs.forEach(d => { const v=d.data(); fin[d.id] = { value:Number(v.value)||0, early: !!v.early }; });
+      }catch(e){ console.error('loadAll: projectFinance read failed', e); }
+
+      const ps = await getDocs(collection(db,'projects'));
+      const active = [];
+      ps.forEach(d => {
+        const x = d.data();
+        if(DONE.indexOf(x.status) >= 0) return;
+        active.push({ id:d.id, x });
+      });
+
+      // Pull each active project's real items so scheduling can be based on
+      // what's actually LEFT to build, not the full order value regardless of
+      // how much of it is already done. One extra read per active project —
+      // fine at this tool's scale (an admin planning view, not a hot path).
+      const itemsByProject = {};
+      await Promise.all(active.map(async ({id}) => {
+        try{
+          const isnap = await getDocs(collection(db,'projects',id,'items'));
+          itemsByProject[id] = isnap.docs.map(d => d.data());
+        }catch(e){ console.error('loadAll: items read failed for', id, e); itemsByProject[id] = []; }
+      }));
+
+      projects = active.map(({id,x}) => {
+        let completion = 0;
+        try{ completion = computeCompletion(itemsByProject[id]); }
+        catch(e){ console.error('loadAll: computeCompletion failed for', id, e); }
+        const totalValue = (fin[id]&&fin[id].value)||0;
+        return {
+          id, name:x.projectName||'(unnamed)', client:x.location||'',
+          status:x.status||'', orderDate:x.orderDate||'', requested:x.handoverDate||'',
+          value: totalValue,
+          completion: completion,                          // 0..1, for display
+          remaining: Math.max(0, totalValue * (1 - completion)),  // what scheduling actually uses
+          early: !!(fin[id]&&fin[id].early),
+          createdAt:(x.createdAt&&x.createdAt.seconds)?x.createdAt.seconds:0
+        };
+      });
+    }catch(e){
+      // Whatever went wrong, never leave the page silently stuck on its
+      // pre-load state — log it clearly and fall back to an empty book so
+      // render() below still runs and the page shows something honest.
+      console.error('loadAll: failed, showing empty order book —', e);
+      projects = [];
+    }
   }
   const saveValue = (id,val) => setDoc(doc(db,'projectFinance',id), {value:val}, {merge:true});
   const saveEarly = (id,flag) => setDoc(doc(db,'projectFinance',id), {early:!!flag}, {merge:true});
@@ -1512,7 +1524,7 @@
     const bnA=$('bn-admin');    if(bnA) bnA.style.display='flex';
     $('lc-quoteOrder').value = todayStr();
     await loadAll();
-    render();
+    try{ render(); }catch(e){ console.error('render() failed —', e); }
   });
   window.signOut = async function(){ await fbSignOut(auth); window.location.href='login.html'; };
 
