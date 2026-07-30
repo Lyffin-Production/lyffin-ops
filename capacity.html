@@ -796,6 +796,7 @@
   .lc-idx{color:var(--ink-3);font-size:12px}
   .lc-dt{font-size:12px;color:var(--ink-2);white-space:nowrap}
   .lc-vinput{width:70px;padding:5px 7px;border:1px solid var(--border);border-radius:5px;text-align:right;font-size:13px;font-family:var(--font-sans);background:var(--white);color:var(--ink)}
+  .lc-daysinput{width:70px;padding:5px 7px;border:1px solid var(--border);border-radius:5px;text-align:right;font-size:13px;font-family:var(--font-sans);background:var(--white);color:var(--ink)}
   .lc-pn{font-weight:600}
   .lc-pc{font-size:11px;color:var(--ink-3)}
   .lc-comp{font-weight:600;color:var(--ink);white-space:nowrap}
@@ -1218,6 +1219,10 @@
     if(!want)      return {cls:'', txt:'no handover date'};
     const target = targetDate(r.p);
     if(r.overflow) return {cls:'over', txt:'LATE · beyond horizon', late:true, risk:true};
+    // Real per-item progress already accounts for the whole value — there's
+    // nothing left to schedule, so it never got a start/finish date. That's
+    // a finished job sitting in an active-looking status, not an error.
+    if(!r.finish) return {cls:'ok', txt:'✓ fully built — update its status'};
 
     // Built for stock: finish as early as possible, then it waits in the warehouse.
     if(r.p.early){
