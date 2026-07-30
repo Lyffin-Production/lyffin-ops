@@ -882,6 +882,10 @@
       <div>
         <div class="lc-card">
           <h3>Capacity settings</h3>
+          <label class="lc-lab">Monthly production capacity</label>
+          <input id="lc-cap" class="lc-inp" type="number" min="1" value="50">
+          <div class="lc-hint">Total units of value the floor can genuinely produce per month, across every project running at once.</div>
+
           <label class="lc-lab">Working days per month</label>
           <input id="lc-wd" class="lc-inp" type="number" min="1" max="31" value="26">
           <label class="lc-check"><input id="lc-sun" type="checkbox" checked> Sunday is the weekly off</label>
@@ -890,17 +894,22 @@
           <input id="lc-lead" class="lc-inp" type="number" min="0" max="60" value="5">
           <div class="lc-hint">The schedule aims at handover minus this. It's the safety margin for QC, touch-ups and transport — not spare time to sell.</div>
 
-          <label class="lc-lab">Minimum production days per project</label>
-          <input id="lc-min" class="lc-inp" type="number" min="1" max="60" value="3">
-          <div class="lc-hint">A floor under whatever's entered per-project — no job goes faster than this, however small the estimate.</div>
-
           <label class="lc-lab">Projects worked in parallel</label>
           <input id="lc-wip" class="lc-inp" type="number" min="1" max="40" value="6">
-          <div class="lc-hint">How many jobs can occupy the floor at once. Once a project claims a slot it keeps it until finished — a higher-priority job waits for the next opening rather than bumping one already in progress.</div>
+          <div class="lc-hint">How many jobs can be drawing on the monthly capacity at once. Each still finishes on its own timeline — this just caps how many run together.</div>
 
           <label class="lc-lab">Buffer held back (%)</label>
           <input id="lc-buf" class="lc-inp" type="number" min="0" max="60" value="18">
-          <div class="lc-hint">Reduces the effective slots used for scheduling, reserving the rest for leave, rework and urgent jobs. <b id="lc-effslots">—</b> effective slots.</div>
+          <div class="lc-hint">Reserved for leave, rework and urgent jobs, on top of everything scheduled below.</div>
+
+          <div class="lc-hint" style="margin-top:10px;padding:10px;background:var(--surface);border-radius:6px">
+            <b>Minimum production days, by project size:</b><br>
+            0–15 units → 30–45 days<br>
+            15–30 units → 45–60 days<br>
+            30–50 units → 60–75 days<br>
+            50+ units → 75–90 days<br>
+            A bigger job simply needs longer, whatever the factory's day estimate says — the schedule never goes faster than the low end of its tier, and uses the factory's own number when it's higher than that.
+          </div>
 
           <button id="lc-save" class="lc-btn">Save settings</button>
         </div>
@@ -909,13 +918,15 @@
           <h3>Quote a new project</h3>
           <label class="lc-lab">Order date</label>
           <input id="lc-quoteOrder" class="lc-inp" type="date">
-          <label class="lc-lab">Estimated production days</label>
-          <input id="lc-quoteVal" class="lc-inp" type="number" min="1" placeholder="e.g. 20">
-          <div class="lc-hint">The figure the factory gave you after discussing this job — not derived from price.</div>
+          <label class="lc-lab">Project value (units)</label>
+          <input id="lc-quoteValue" class="lc-inp" type="number" min="1" placeholder="e.g. 25">
+          <label class="lc-lab">Estimated production days (optional)</label>
+          <input id="lc-quoteDays" class="lc-inp" type="number" min="1" placeholder="leave blank to use the value-tier minimum">
+          <div class="lc-hint">Only fill this in if the factory gave you a specific number for this job — otherwise the value-tier minimum on the left is used.</div>
           <label class="lc-lab">Client's requested handover (optional)</label>
           <input id="lc-quoteReq" class="lc-inp" type="date">
-          <div id="lc-quoteResult" class="lc-qr lc-muted">Enter the estimated days above.</div>
-          <div class="lc-hint" style="margin-top:8px">Carpentry/polish/upholstery split 50/25/25 per product once items exist — a product with no upholstery or no polish reallocates its share automatically.</div>
+          <div id="lc-quoteResult" class="lc-qr lc-muted">Enter the project value above.</div>
+          <div class="lc-hint" style="margin-top:8px">Runs alongside your other active projects, sharing the monthly capacity — a small job doesn't wait behind a large one.</div>
         </div>
       </div>
 
@@ -954,7 +965,8 @@
               <th style="width:20px">#</th>
               <th>Project / location</th>
               <th style="width:64px">Ordered</th>
-              <th class="r" style="width:76px" title="Total production days, as estimated by the factory">Est. days</th>
+              <th class="r" style="width:68px" title="Project value, in units — drives both the monthly-capacity split and the minimum-days tier">Value</th>
+              <th class="r" style="width:68px" title="Only if the factory gave you a specific number — otherwise the value-tier minimum below is used">Est. days</th>
               <th style="width:150px" title="Real progress from the items tracked in Production, and how many days are actually left. Whether Polish/Upholstery apply is read automatically per item.">Progress</th>
               <th class="c" style="width:52px" title="Build as early as possible and hold in the warehouse">Early</th>
               <th style="width:64px">Wanted</th>
@@ -962,7 +974,7 @@
             </tr></thead>
             <tbody id="lc-body"></tbody>
           </table>
-          <div class="lc-hint" style="margin-top:8px">Enter the days the factory expects this job to take. Once items are pushed to Production, progress and days-left update automatically — including which stages actually apply, since a product with no upholstery or no polish is already marked that way on the item itself, and its share reallocates to the rest.</div>
+          <div class="lc-hint" style="margin-top:8px">Value drives how much of the monthly capacity a project draws — several projects can run at once, each on its own timeline, as long as their combined draw fits the month. Est. days is optional: leave it blank to use the value-tier minimum, or enter the factory's own number if you've discussed one — whichever is higher wins. Progress and days-left update automatically once items are pushed to Production.</div>
           <div class="lc-tot">
             <div>Projects<b id="lc-count">0</b></div>
             <div>Estimated<b id="lc-valued">—</b></div>
@@ -1016,10 +1028,10 @@
   const DONE    = ['Delivered','Completed','Complaints'];
   const MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-  let cfg = { buffer: 18, workDays: 26, wip: 6, leadDays: 5, minDays: 3, sundayOff: true };
+  let cfg = { capacity: 50, buffer: 18, workDays: 26, wip: 6, leadDays: 5, sundayOff: true };
   let sortMode = 'edd';
   let projects = [];
-  let quoteVal = null, quoteReq = null, quoteOrder = null;
+  let quoteValue = null, quoteDays = null, quoteReq = null, quoteOrder = null;
 
   /* ── date helpers ──────────────────────────────────────────────────── */
   const pad = n => (n<10?'0':'')+n;
@@ -1041,22 +1053,40 @@
   function isWorkDay(d){ return cfg.sundayOff ? d.getDay() !== 0 : true; }
 
   /* ── engine (day-wise) ─────────────────────────────────────────────── */
-  // Buffer now reduces the effective number of concurrent slots, instead of
-  // a monetary daily output — e.g. 6 parallel slots with an 18% buffer
-  // schedules against 5, keeping one in reserve for leave/rework/urgent jobs.
-  function effectiveSlots(){
-    return Math.max(1, Math.round(cfg.wip * (1 - cfg.buffer/100)));
+  // Buffer reduces the effective daily output, held back for leave, rework
+  // and urgent jobs on top of everything scheduled.
+  function dailyCapacity(){
+    const wd = cfg.workDays > 0 ? cfg.workDays : 26;
+    const s = (cfg.capacity / wd) * (1 - cfg.buffer/100);
+    return s > 0 ? s : 0.0001;
+  }
+  // Bigger jobs simply need longer, whatever the factory's own day estimate
+  // says — this is the floor under that. Returns the low end of the
+  // project's size tier.
+  function tierMinDays(value){
+    if(value <= 15) return 30;
+    if(value <= 30) return 45;
+    if(value <= 50) return 60;
+    return 75;
+  }
+  // The number of days actually used to schedule a project: the factory's
+  // own estimate when there is one, but never less than its value-tier
+  // floor — a bigger job doesn't get compressed just because someone typed
+  // an optimistic number.
+  function effectiveMinDays(project){
+    const floor = tierMinDays(project.value > 0 ? project.value : 0);
+    return project.estimatedDays > 0 ? Math.max(project.estimatedDays, floor) : floor;
   }
   // The timeline starts TODAY. Work that hasn't happened yet cannot be scheduled
   // into the past, so an old order that was never started is planned from today
   // forward — which is what makes it show as genuinely late instead of "done".
   function timelineBase(){ return today(); }
   function buildDays(base){
-    const slots = effectiveSlots();
+    const cap = dailyCapacity();
     const out = new Array(HORIZON);
     for(let i=0;i<HORIZON;i++){
       const d = addDays(base, i), work = isWorkDay(d);
-      out[i] = { date:d, isWork:work, slotsTotal: work?slots:0, slotsUsed:0 };
+      out[i] = { date:d, isWork:work, cap: work?cap:0, committed:0 };
     }
     return out;
   }
@@ -1081,53 +1111,90 @@
   // higher-priority job arriving later, since real production doesn't work
   // that way. Only a slot that genuinely frees up (a project finishing) gets
   // reassigned, and it goes to the best-priority project still waiting.
+  // Projects run CONCURRENTLY: every working day the floor's capacity is
+  // shared between the jobs in production, so several smaller projects can
+  // run alongside a larger one, each on its own timeline — a job worth 10
+  // units and one worth 25 units can both be in progress at once, as long
+  // as their combined draw fits the monthly capacity. Two physical limits
+  // apply per project: cfg.wip caps how many jobs can draw on the pool at
+  // once, and effectiveMinDays(p) — the value-tier floor, or the factory's
+  // own estimate if it's higher — caps how fast any single job can be
+  // compressed, however small its remaining value.
   function allocate(list){
     const src  = list || projects;
     const base = timelineBase();
     const days = buildDays(base);
     const order = orderedProjects(src);
-    const minD = cfg.minDays > 0 ? cfg.minDays : 1;
 
     const st = order.map(p => {
       const od = parseYMD(p.orderDate);
       let s0 = od ? dayDiff(base, od) : 0;
       if(s0 < 0) s0 = 0;
-      let remaining = p.remainingDays > 0 ? p.remainingDays : 0;
-      if(remaining > 0) remaining = Math.max(remaining, minD); // floor, but only if there's genuinely work left
-      return { p, remaining, startIdx: s0, first: null, last: null };
+      const val = p.remainingValue > 0 ? p.remainingValue : 0;
+      const minD = effectiveMinDays(p);
+      return {
+        p, rem: val, startIdx: s0, first: null, last: null,
+        maxPerDay: val > 0 ? val / minD : 0    // spreads the job over >= minD days
+      };
     });
-
-    let activeSet = []; // currently holding a slot, sticky across days
 
     for(let i=0; i<days.length; i++){
       const day = days[i];
       if(!day.isWork) continue;
 
-      // Drop anything that finished as of yesterday.
-      activeSet = activeSet.filter(x => x.remaining > 1e-6);
+      const eligible = [];
+      for(const x of st){
+        if(x.rem > 1e-6 && x.startIdx <= i){
+          eligible.push(x);
+          if(eligible.length >= cfg.wip) break;
+        }
+      }
+      if(!eligible.length) continue;
 
-      // Fill any newly-free slots, in priority order (st is already
-      // early-first-then-priority from orderedProjects).
-      if(activeSet.length < day.slotsTotal){
-        for(const x of st){
-          if(activeSet.length >= day.slotsTotal) break;
-          if(x.remaining <= 1e-6) continue;
-          if(x.startIdx > i) continue;
-          if(activeSet.indexOf(x) !== -1) continue;
-          activeSet.push(x);
+      const takenToday = new Map();
+      let pool = day.cap;
+
+      // "Build early for stock" jobs get FIRST call on the day's capacity, up to
+      // their per-day ceiling, so they finish as fast as physically possible.
+      // Whatever is left is then shared by the rest.
+      for(const x of eligible){
+        if(!x.p.early || pool <= 1e-6) continue;
+        const take = Math.min(pool, x.rem, x.maxPerDay);
+        if(take > 1e-9){
+          x.rem -= take; pool -= take;
+          takenToday.set(x, take);
+          if(x.first === null) x.first = i;
+          x.last = i;
         }
       }
 
-      activeSet.forEach(x => {
-        if(x.first === null) x.first = i;
-        x.last = i;
-        x.remaining -= 1;
-      });
-      day.slotsUsed = activeSet.length;
+      let actives = eligible.filter(x => x.rem > 1e-6 &&
+        (x.maxPerDay - (takenToday.get(x)||0)) > 1e-6);
+      while(pool > 1e-6 && actives.length){
+        const share = pool / actives.length;
+        let used = 0;
+        const still = [];
+        for(const x of actives){
+          const already = takenToday.get(x) || 0;
+          const room = x.maxPerDay - already;               // curing/stage limit
+          const take = Math.min(share, x.rem, room);
+          if(take > 1e-9){
+            x.rem -= take; used += take;
+            takenToday.set(x, already + take);
+            if(x.first === null) x.first = i;
+            x.last = i;
+          }
+          if(x.rem > 1e-6 && (x.maxPerDay - (takenToday.get(x)||0)) > 1e-6) still.push(x);
+        }
+        pool -= used;
+        actives = still;
+        if(used <= 1e-9) break;
+      }
+      day.committed = day.cap - pool;
     }
 
     const result = st.map(x => {
-      const overflow = x.remaining > 1e-6;
+      const overflow = x.rem > 1e-6;
       return {
         p: x.p,
         firstIdx: x.first,
@@ -1146,7 +1213,7 @@
     return want ? addDays(want, -cfg.leadDays) : null;
   }
   function statusFor(r){
-    if(!(r.p.estimatedDays>0)) return {cls:'', txt:'set estimated days →'};
+    if(!(r.p.value>0)) return {cls:'', txt:'set a value \u2192'};
     const want = parseYMD(r.p.requested);
     if(!want)      return {cls:'', txt:'no handover date'};
     const target = targetDate(r.p);
@@ -1189,30 +1256,28 @@
   // stages remain, in their existing ratio — e.g. no upholstery needed
   // means Carpentry:Polish keep their 50:25 (2:1) ratio over the full
   // 100%, so Carpentry gets 2/3 and Polish gets 1/3 of the days.
+  // Carpentry/Polish/Upholstery split 50/25/25 of a share of days or value.
+  // If a stage genuinely doesn't apply, its share reallocates to whichever
+  // stages remain, in their existing ratio — e.g. no upholstery needed
+  // means Carpentry:Polish keep their 50:25 (2:1) ratio over the full
+  // 100%, so Carpentry gets 2/3 and Polish gets 1/3.
   function stageWeights(needsPolish, needsUpholstery){
     const base = { carpentry: 50, polish: needsPolish ? 25 : 0, upholstery: needsUpholstery ? 25 : 0 };
     const sum = base.carpentry + base.polish + base.upholstery;
     return { carpentry: base.carpentry/sum, polish: base.polish/sum, upholstery: base.upholstery/sum };
   }
-  // The actual number this whole page schedules against: how many
-  // production days are genuinely still left on this project.
+  // 0..1 real progress, from the items actually tracked in Production.
   //
   // Whether Polish/Upholstery apply is a property of each PRODUCT, not the
   // project as a whole — one item in an order might need upholstery while
-  // another in the same order doesn't. So once real items exist (pushed
-  // from the Factory Listing Tool), the factory's overall day estimate is
-  // split evenly across the active items as a baseline, then EACH item's
-  // own stage flags (already marked N/A there when a stage doesn't apply)
-  // and its own real progress determine how many of its days are left.
-  // Before any items exist yet, there's nothing to differentiate by
-  // product, so the full estimate is treated as remaining, split 50/25/25.
-  function computeRemainingDays(project, items){
-    const est = project.estimatedDays > 0 ? project.estimatedDays : 0;
+  // another in the same order doesn't. Each active item's own stage flags
+  // (already marked N/A there when a stage doesn't apply) and its own real
+  // stage completion are weighted 50/25/25 and averaged across all items.
+  // No items yet means nothing's built — 0 progress.
+  function computeProgressFraction(items){
     const active = (items||[]).filter(function(i){ return !i.removed; });
-    if(!active.length) return est;
-
-    const perItemDays = est / active.length;
-    let totalRemaining = 0;
+    if(!active.length) return 0;
+    let sum = 0;
     active.forEach(function(it){
       const needsPolish = it.polishStatus !== 'na';
       const needsUpholstery = it.upholsteryStatus !== 'na';
@@ -1220,18 +1285,15 @@
       const cDone = it.carpentryStatus === 'done' ? 1 : 0;
       const pDone = needsPolish ? (it.polishStatus === 'done' ? 1 : 0) : 1;
       const uDone = needsUpholstery ? (it.upholsteryStatus === 'done' ? 1 : 0) : 1;
-      totalRemaining += perItemDays*w.carpentry*(1-cDone)
-                      + perItemDays*w.polish*(1-pDone)
-                      + perItemDays*w.upholstery*(1-uDone);
+      sum += w.carpentry*cDone + w.polish*pDone + w.upholstery*uDone;
     });
-    return Math.max(0, totalRemaining);
+    return Math.max(0, Math.min(1, sum/active.length));
   }
-  // Overall 0..1 progress for display — matches the same per-item weighting
-  // so the % shown lines up with the days-left figure next to it.
-  function computeProgressPct(project, items){
-    const est = project.estimatedDays > 0 ? project.estimatedDays : 0;
-    if(est <= 0) return 0;
-    return Math.max(0, Math.min(1, 1 - (computeRemainingDays(project, items) / est)));
+  // What the schedule actually runs on: how much of the project's VALUE is
+  // genuinely still left to build, given real per-product progress.
+  function computeRemainingValue(project, items){
+    const val = project.value > 0 ? project.value : 0;
+    return Math.max(0, val * (1 - computeProgressFraction(items)));
   }
 
   async function loadAll(){
@@ -1240,11 +1302,11 @@
         const cs = await getDoc(doc(db,'config','capacity'));
         if(cs.exists()){
           const d = cs.data();
+          if(typeof d.monthlyOutput==='number') cfg.capacity = d.monthlyOutput;
           if(typeof d.bufferPct==='number')     cfg.buffer   = d.bufferPct;
           if(typeof d.workDays==='number')      cfg.workDays = d.workDays;
           if(typeof d.wip==='number')           cfg.wip      = d.wip;
           if(typeof d.leadDays==='number')      cfg.leadDays = d.leadDays;
-          if(typeof d.minDays==='number')       cfg.minDays  = d.minDays;
           if(typeof d.sundayOff==='boolean')    cfg.sundayOff = d.sundayOff;
         }
       }catch(e){ console.error('loadAll: config read failed', e); }
@@ -1255,6 +1317,7 @@
         fs.forEach(d => {
           const v=d.data();
           fin[d.id] = {
+            value: Number(v.value)||0,
             estimatedDays: Number(v.estimatedDays)||0,
             early: !!v.early
           };
@@ -1270,7 +1333,7 @@
       });
 
       // Pull each active project's real items so scheduling can be based on
-      // what's actually LEFT to build, not the full estimate regardless of
+      // what's actually LEFT to build, not the full value regardless of
       // how much is already done. One extra read per active project — fine
       // at this tool's scale (an admin planning view, not a hot path).
       const itemsByProject = {};
@@ -1282,19 +1345,20 @@
       }));
 
       projects = active.map(({id,x}) => {
-        const f = fin[id] || { estimatedDays:0, early:false };
+        const f = fin[id] || { value:0, estimatedDays:0, early:false };
         const items = itemsByProject[id] || [];
-        let remainingDays = 0, progressPct = 0;
+        let progressPct = 0, remainingValue = 0;
         try{
-          remainingDays = computeRemainingDays(f, items);
-          progressPct   = computeProgressPct(f, items);
-        }catch(e){ console.error('loadAll: remaining-days calc failed for', id, e); }
+          progressPct = computeProgressFraction(items);
+          remainingValue = computeRemainingValue(f, items);
+        }catch(e){ console.error('loadAll: remaining-value calc failed for', id, e); }
         return {
           id, name:x.projectName||'(unnamed)', client:x.location||'',
           status:x.status||'', orderDate:x.orderDate||'', requested:x.handoverDate||'',
+          value: f.value,
           estimatedDays: f.estimatedDays,
-          progressPct: progressPct,       // 0..1, for display
-          remainingDays: remainingDays,   // what scheduling actually uses
+          progressPct: progressPct,           // 0..1, for display
+          remainingValue: remainingValue,     // what scheduling actually uses
           early: f.early,
           createdAt:(x.createdAt&&x.createdAt.seconds)?x.createdAt.seconds:0
         };
@@ -1303,15 +1367,16 @@
       // Whatever went wrong, never leave the page silently stuck on its
       // pre-load state — log it clearly and fall back to an empty book so
       // render() below still runs and the page shows something honest.
-      console.error('loadAll: failed, showing empty order book —', e);
+      console.error('loadAll: failed, showing empty order book \u2014', e);
       projects = [];
     }
   }
+  const saveValue = (id,val) => setDoc(doc(db,'projectFinance',id), {value:val}, {merge:true});
   const saveEstDays = (id,val) => setDoc(doc(db,'projectFinance',id), {estimatedDays:val}, {merge:true});
   const saveEarly = (id,flag) => setDoc(doc(db,'projectFinance',id), {early:!!flag}, {merge:true});
   const saveConfig = () => setDoc(doc(db,'config','capacity'),
-    {bufferPct:cfg.buffer, workDays:cfg.workDays, wip:cfg.wip,
-     leadDays:cfg.leadDays, minDays:cfg.minDays, sundayOff:cfg.sundayOff}, {merge:true});
+    {monthlyOutput:cfg.capacity, bufferPct:cfg.buffer, workDays:cfg.workDays, wip:cfg.wip,
+     leadDays:cfg.leadDays, sundayOff:cfg.sundayOff}, {merge:true});
 
   /* ── render ─────────────────────────────────────────────────────────── */
   const $ = id => document.getElementById(id);
@@ -1321,13 +1386,12 @@
   function setVal(el, v){ if(document.activeElement !== el) el.value = v; }
 
   function render(){
+    setVal($('lc-cap'),  cfg.capacity);
     setVal($('lc-buf'),  cfg.buffer);
     setVal($('lc-wd'),   cfg.workDays);
     setVal($('lc-wip'),  cfg.wip);
     setVal($('lc-lead'), cfg.leadDays);
-    setVal($('lc-min'),  cfg.minDays);
     $('lc-sun').checked = cfg.sundayOff;
-    $('lc-effslots').textContent = effectiveSlots();
     const alloc = allocate();
     renderCalendar(alloc);
     renderBook(alloc);
@@ -1339,7 +1403,7 @@
   function renderCalendar(alloc){
     const days = alloc.days;
     let lastUsed = 0;
-    days.forEach((d,i) => { if(d.slotsUsed>0) lastUsed = i; });
+    days.forEach((d,i) => { if(d.committed>1e-6) lastUsed = i; });
     const show = Math.min(days.length, Math.max(62, lastUsed+10));
     const t = today();
 
@@ -1352,7 +1416,7 @@
         months.push(m);
       }
       m.cells.push(d);
-      if(d.isWork){ m.used += d.slotsUsed; m.free += Math.max(0, d.slotsTotal-d.slotsUsed); }
+      if(d.isWork){ m.used += d.committed; m.free += Math.max(0, d.cap-d.committed); }
     }
 
     let html = '';
@@ -1362,14 +1426,14 @@
       for(let k=0;k<firstDow;k++) cells += '<div class="lc-cell lc-pad"></div>';
       m.cells.forEach(d => {
         let cls = 'lc-cell', title = fmtDate(d.date);
-        if(!d.isWork){ cls += ' lc-off'; title += ' · weekly off'; }
+        if(!d.isWork){ cls += ' lc-off'; title += ' \u00b7 weekly off'; }
         else{
-          const ratio = d.slotsTotal>0 ? d.slotsUsed/d.slotsTotal : 0;
-          if(d.slotsUsed<=0){ cls+=' lc-c0'; title += ' · FREE — '+d.slotsTotal+' slot(s) open'; }
-          else if(ratio>1.0001){ cls+=' lc-c4'; title += ' · OVER'; }
-          else if(ratio>=0.999){ cls+=' lc-c3'; title += ' · full ('+d.slotsUsed+'/'+d.slotsTotal+')'; }
-          else if(ratio>=0.5)  { cls+=' lc-c2'; title += ' · '+d.slotsUsed+'/'+d.slotsTotal+' slots used'; }
-          else                 { cls+=' lc-c1'; title += ' · '+d.slotsUsed+'/'+d.slotsTotal+' slots used'; }
+          const ratio = d.cap>0 ? d.committed/d.cap : 0;
+          if(d.committed<=1e-6){ cls+=' lc-c0'; title += ' \u00b7 FREE \u2014 '+num(d.cap)+' available'; }
+          else if(ratio>1.0001){ cls+=' lc-c4'; title += ' \u00b7 OVER'; }
+          else if(ratio>=0.999){ cls+=' lc-c3'; title += ' \u00b7 full ('+num(d.committed)+')'; }
+          else if(ratio>=0.5)  { cls+=' lc-c2'; title += ' \u00b7 '+num(d.committed)+' used, '+num(d.cap-d.committed)+' free'; }
+          else                 { cls+=' lc-c1'; title += ' \u00b7 '+num(d.committed)+' used, '+num(d.cap-d.committed)+' free'; }
         }
         if(d.date < t) cls += ' lc-past';
         if(d.date.getTime()===t.getTime()) cls += ' lc-today';
@@ -1377,7 +1441,7 @@
       });
       html += '<div class="lc-mrow"><div class="lc-ml">'+m.label+'</div>'+
               '<div class="lc-cells">'+cells+'</div>'+
-              '<div class="lc-mf"><span>'+num(m.used)+' slot-days used</span><br>'+
+              '<div class="lc-mf"><span>'+num(m.used)+' used</span><br>'+
               '<span class="lc-freetxt'+(m.free<=0.01?' zero':'')+'">'+num(m.free)+' free</span></div></div>';
     });
     $('lc-months').innerHTML = html;
@@ -1387,8 +1451,8 @@
       const d = days[i];
       if(!d.isWork || d.date < t) continue;
       if(dayDiff(t, d.date) > 60) break;
-      const f = d.slotsTotal - d.slotsUsed;
-      if(f > 0){ freeSoon += f; freeDays++; }
+      const f = d.cap - d.committed;
+      if(f > 0.01){ freeSoon += f; freeDays++; }
     }
     $('lc-free60').textContent   = num(freeSoon);
     $('lc-freedays').textContent = freeDays;
@@ -1397,34 +1461,36 @@
   function renderBook(alloc){
     let rows='', risk=0, valued=0, lastFinish=null, ovAny=false;
     if(alloc.result.length===0){
-      rows = '<tr><td colspan="8" class="lc-empty">No active projects in the queue. Projects stay here until their status is Delivered or Completed.</td></tr>';
+      rows = '<tr><td colspan="9" class="lc-empty">No active projects in the queue. Projects stay here until their status is Delivered or Completed.</td></tr>';
     }
     alloc.result.forEach((r,i) => {
-      // Each row renders independently — if one project's data causes a
+      // Each row renders independently \u2014 if one project's data causes a
       // problem, it shows as one visibly-broken row instead of silently
       // wiping out the whole table and every total below it.
       try{
-        const p = r.p, st = statusFor(r), hasVal = p.estimatedDays>0;
+        const p = r.p, st = statusFor(r), hasVal = p.value>0;
         if(hasVal) valued++;
         if(st.risk) risk++;
         if(r.overflow) ovAny = true;
         if(hasVal && r.finish && (!lastFinish || r.finish>lastFinish)) lastFinish = r.finish;
         const storeNote = (st.store && st.store >= 20)
-          ? '<div class="lc-store">≈'+st.store+' d in store before handover</div>' : '';
+          ? '<div class="lc-store">\u2248'+st.store+' d in store before handover</div>' : '';
         const runs = (hasVal && r.start && r.finish)
           ? '<div class="lc-runs">runs '+fmtDate(r.start)+' \u2192 '+fmtDate(r.finish)+'</div>' : '';
         const tgt = targetDate(p);
         const tgtNote = (!p.early && tgt) ? '<div class="lc-runs">aim: '+fmtDate(tgt)+'</div>' : '';
         const pct = Math.round((p.progressPct||0)*100);
+        const minD = effectiveMinDays(p);
         const progressHtml = !hasVal ? '<span class="lc-muted">\u2014</span>'
           : (pct > 0
-              ? '<div class="lc-progress-bar"><div class="lc-progress-fill" style="width:'+pct+'%"></div></div><div class="lc-runs">'+pct+'% done \u00b7 '+num(p.remainingDays)+'d left</div>'
-              : '<span class="lc-muted">not started \u00b7 '+num(p.remainingDays)+'d left</span>');
+              ? '<div class="lc-progress-bar"><div class="lc-progress-fill" style="width:'+pct+'%"></div></div><div class="lc-runs">'+pct+'% done \u00b7 '+num(p.remainingValue)+' left \u00b7 min '+minD+'d</div>'
+              : '<span class="lc-muted">not started \u00b7 min '+minD+'d</span>');
         rows += '<tr'+(p.early?' class="lc-earlyrow"':'')+'>'+
           '<td class="lc-idx">'+(i+1)+'</td>'+
           '<td><div class="lc-pn">'+esc(p.name)+'</div><div class="lc-pc">'+esc(p.client)+' \u00b7 '+esc(p.status)+'</div></td>'+
           '<td class="lc-dt">'+fmtShort(p.orderDate)+'</td>'+
-          '<td class="r"><input class="lc-vinput" type="number" min="0" step="0.5" data-id="'+p.id+'" value="'+(hasVal?p.estimatedDays:'')+'" placeholder="\u2014"></td>'+
+          '<td class="r"><input class="lc-vinput" type="number" min="0" step="0.5" data-id="'+p.id+'" value="'+(hasVal?p.value:'')+'" placeholder="\u2014"></td>'+
+          '<td class="r"><input class="lc-daysinput" type="number" min="0" step="1" data-id="'+p.id+'" value="'+(p.estimatedDays>0?p.estimatedDays:'')+'" placeholder="\u2014"></td>'+
           '<td>'+progressHtml+'</td>'+
           '<td class="c"><input class="lc-early" type="checkbox" data-id="'+p.id+'"'+(p.early?' checked':'')+' title="Build as early as possible and hold in the warehouse"></td>'+
           '<td class="lc-dt">'+fmtShort(p.requested)+'</td>'+
@@ -1432,7 +1498,7 @@
             '<span class="lc-pill '+(st.cls||'')+'">'+st.txt+'</span>'+runs+tgtNote+storeNote+'</td></tr>';
       }catch(e){
         console.error('renderBook: row failed for project', r && r.p && r.p.id, e);
-        rows += '<tr><td colspan="8" class="lc-empty">\u26a0 Couldn\'t display "'+esc((r&&r.p&&r.p.name)||'this project')+'" \u2014 '+esc(e.message)+'</td></tr>';
+        rows += '<tr><td colspan="9" class="lc-empty">\u26a0 Couldn\'t display "'+esc((r&&r.p&&r.p.name)||'this project')+'" \u2014 '+esc(e.message)+'</td></tr>';
       }
     });
     $('lc-body').innerHTML = rows;
@@ -1449,40 +1515,41 @@
 
   function renderQuote(){
     const el = $('lc-quoteResult');
-    if(quoteVal==null || isNaN(quoteVal) || quoteVal<=0){
-      el.className='lc-qr lc-muted'; el.textContent='Enter the estimated days above.'; return;
+    if(quoteValue==null || isNaN(quoteValue) || quoteValue<=0){
+      el.className='lc-qr lc-muted'; el.textContent='Enter the project value above.'; return;
     }
     const od = quoteOrder || todayStr();
     const hyp = {
       id:'__q', name:'quote', client:'', status:'', orderDate:od, requested:quoteReq||'',
-      estimatedDays:quoteVal, remainingDays:quoteVal, progressPct:0, createdAt:0
+      value:quoteValue, estimatedDays:quoteDays||0, remainingValue:quoteValue, progressPct:0, createdAt:0
     };
     const alloc = allocate(projects.concat([hyp]));
     let r=null; for(const x of alloc.result){ if(x.p.id==='__q'){ r=x; break; } }
     const st = statusFor(r);
+    const minD = effectiveMinDays(hyp);
     const wdays = (r.firstIdx!=null && r.lastIdx!=null)
       ? alloc.days.slice(r.firstIdx, r.lastIdx+1).filter(d=>d.isWork).length : 0;
     el.className = 'lc-qr';
     if(!quoteReq){
-      el.innerHTML = 'Ordered '+fmtDate(parseYMD(od))+' \u2192 completes <b>'+fmtDate(r.finish)+'</b>.'+
-        '<br><span class="lc-muted">Promise handover on or after that date. Spans '+wdays+' working days once it has a slot.</span>';
+      el.innerHTML = 'Ordered '+fmtDate(parseYMD(od))+' \u2192 completes <b>'+fmtDate(r.finish)+'</b> (min '+minD+' days for this size).'+
+        '<br><span class="lc-muted">Promise handover on or after that date. Spans '+wdays+' working days.</span>';
     } else if(st.late){
       el.innerHTML = '<span class="lc-pill over">can\u2019t hit that date</span><br>Earliest completion is <b>'+fmtDate(r.finish)+'</b> \u2014 '+st.txt.toLowerCase()+'.'+
         '<br><span class="lc-muted">Offer that date, or move it up the queue \u2014 which pushes another project.</span>';
     } else {
       el.innerHTML = '<span class="lc-pill '+(st.cls==='tight'?'tight':'ok')+'">fits the requested date</span><br>Completes <b>'+fmtDate(r.finish)+'</b> \u2014 '+st.txt+'.'+
-        '<br><span class="lc-muted">Safe to confirm. Spans '+wdays+' working days once it has a slot.</span>';
+        '<br><span class="lc-muted">Safe to confirm. Spans '+wdays+' working days.</span>';
     }
   }
 
   /* ── events ─────────────────────────────────────────────────────────── */
+  $('lc-cap').addEventListener('input', function(){ cfg.capacity=Math.max(0,+this.value||0); render(); });
   $('lc-buf').addEventListener('input', function(){ cfg.buffer=Math.min(60,Math.max(0,+this.value||0)); render(); });
   $('lc-wd').addEventListener('input',  function(){ cfg.workDays=Math.min(31,Math.max(1,+this.value||26)); render(); });
   $('lc-wip').addEventListener('input', function(){ cfg.wip=Math.min(40,Math.max(1,+this.value||6)); render(); });
   $('lc-lead').addEventListener('input', function(){ cfg.leadDays=Math.min(60,Math.max(0,+this.value||0)); render(); });
-  $('lc-min').addEventListener('input',  function(){ cfg.minDays=Math.min(60,Math.max(1,+this.value||1)); render(); });
   // Once you tap away, snap the field to its final clamped value.
-  ['lc-buf','lc-wd','lc-wip','lc-lead','lc-min'].forEach(id => {
+  ['lc-cap','lc-buf','lc-wd','lc-wip','lc-lead'].forEach(id => {
     $(id).addEventListener('blur', render);
   });
   $('lc-sun').addEventListener('change', function(){ cfg.sundayOff=this.checked; render(); });
@@ -1491,7 +1558,8 @@
     saveConfig().then(()=>{b.textContent='Saved ✓';}).catch(()=>{b.textContent='Save failed';})
       .finally(()=>setTimeout(()=>{b.disabled=false;b.textContent='Save settings';},1400));
   });
-  $('lc-quoteVal').addEventListener('input', function(){ quoteVal=this.value===''?null:+this.value; renderQuote(); });
+  $('lc-quoteValue').addEventListener('input', function(){ quoteValue=this.value===''?null:+this.value; renderQuote(); });
+  $('lc-quoteDays').addEventListener('input', function(){ quoteDays=this.value===''?null:+this.value; renderQuote(); });
   $('lc-quoteReq').addEventListener('change', function(){ quoteReq=this.value||null; renderQuote(); });
   $('lc-quoteOrder').addEventListener('change', function(){ quoteOrder=this.value||null; renderQuote(); });
   $('lc-sortEdd').addEventListener('click', ()=>{ sortMode='edd'; render(); });
@@ -1511,14 +1579,20 @@
     if(t.classList.contains('lc-vinput')){
       const val=Math.max(0,+t.value||0);
       if(p){
-        p.estimatedDays=val;
-        // Re-scale remaining days proportionally to the new estimate,
+        p.value=val;
+        // Re-scale remaining value proportionally to the new total,
         // preserving whatever fraction was already known to be done —
         // a full items-based recompute happens on the next full reload.
         const prevPct = p.progressPct||0;
-        p.remainingDays = Math.max(0, val*(1-prevPct));
+        p.remainingValue = Math.max(0, val*(1-prevPct));
         render();
       }
+      saveValue(id,val).catch(err=>console.error('save value failed',err));
+      return;
+    }
+    if(t.classList.contains('lc-daysinput')){
+      const val=Math.max(0,+t.value||0);
+      if(p){ p.estimatedDays=val; render(); }
       saveEstDays(id,val).catch(err=>console.error('save estimatedDays failed',err));
       return;
     }
