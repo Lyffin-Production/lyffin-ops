@@ -1409,39 +1409,53 @@
       rows = '<tr><td colspan="8" class="lc-empty">No active projects in the queue. Projects stay here until their status is Delivered or Completed.</td></tr>';
     }
     alloc.result.forEach((r,i) => {
-      const p = r.p, st = statusFor(r), hasVal = p.value>0;
-      if(hasVal) valued++;
-      if(st.risk) risk++;
-      if(r.overflow) ovAny = true;
-      if(hasVal && r.finish && (!lastFinish || r.finish>lastFinish)) lastFinish = r.finish;
-      const storeNote = (st.store && st.store >= 20)
-        ? '<div class="lc-store">≈'+st.store+' d in store before handover</div>' : '';
-      const runs = (hasVal && r.start && r.finish)
-        ? '<div class="lc-runs">runs '+fmtDate(r.start)+' → '+fmtDate(r.finish)+'</div>' : '';
-      const tgt = targetDate(p);
-      const tgtNote = (!p.early && tgt) ? '<div class="lc-runs">aim: '+fmtDate(tgt)+'</div>' : '';
-      const pct = Math.round((p.completion||0)*100);
-      const progressHtml = !hasVal ? '<span class="lc-muted">—</span>'
-        : (pct > 0
-            ? '<div class="lc-progress-bar"><div class="lc-progress-fill" style="width:'+pct+'%"></div></div><div class="lc-runs">'+pct+'% done · '+num(p.remaining)+' left</div>'
-            : '<span class="lc-muted">not started</span>');
-      rows += '<tr'+(p.early?' class="lc-earlyrow"':'')+'>'+
-        '<td class="lc-idx">'+(i+1)+'</td>'+
-        '<td><div class="lc-pn">'+esc(p.name)+'</div><div class="lc-pc">'+esc(p.client)+' · '+esc(p.status)+'</div></td>'+
-        '<td class="lc-dt">'+fmtShort(p.orderDate)+'</td>'+
-        '<td class="r"><input class="lc-vinput" type="number" min="0" step="0.5" data-id="'+p.id+'" value="'+(hasVal?p.value:'')+'" placeholder="—"></td>'+
-        '<td>'+progressHtml+'</td>'+
-        '<td class="c"><input class="lc-early" type="checkbox" data-id="'+p.id+'"'+(p.early?' checked':'')+' title="Build as early as possible and hold in the warehouse"></td>'+
-        '<td class="lc-dt">'+fmtShort(p.requested)+'</td>'+
-        '<td>'+(hasVal&&r.finish?'<div class="lc-comp">'+fmtDate(r.finish)+(r.overflow?' <span class="lc-red">(beyond horizon)</span>':'')+'</div>':'')+
-          '<span class="lc-pill '+(st.cls||'')+'">'+st.txt+'</span>'+runs+tgtNote+storeNote+'</td></tr>';
+      // Each row renders independently now — if one project's data causes a
+      // problem, it shows as one visibly-broken row instead of silently
+      // wiping out the whole table and every total below it (which is
+      // exactly what happened with the lakhFmt bug: one bad row killed
+      // everything downstream, including rows that were perfectly fine).
+      try{
+        const p = r.p, st = statusFor(r), hasVal = p.value>0;
+        if(hasVal) valued++;
+        if(st.risk) risk++;
+        if(r.overflow) ovAny = true;
+        if(hasVal && r.finish && (!lastFinish || r.finish>lastFinish)) lastFinish = r.finish;
+        const storeNote = (st.store && st.store >= 20)
+          ? '<div class="lc-store">≈'+st.store+' d in store before handover</div>' : '';
+        const runs = (hasVal && r.start && r.finish)
+          ? '<div class="lc-runs">runs '+fmtDate(r.start)+' → '+fmtDate(r.finish)+'</div>' : '';
+        const tgt = targetDate(p);
+        const tgtNote = (!p.early && tgt) ? '<div class="lc-runs">aim: '+fmtDate(tgt)+'</div>' : '';
+        const pct = Math.round((p.completion||0)*100);
+        const progressHtml = !hasVal ? '<span class="lc-muted">—</span>'
+          : (pct > 0
+              ? '<div class="lc-progress-bar"><div class="lc-progress-fill" style="width:'+pct+'%"></div></div><div class="lc-runs">'+pct+'% done · '+num(p.remaining)+' left</div>'
+              : '<span class="lc-muted">not started</span>');
+        rows += '<tr'+(p.early?' class="lc-earlyrow"':'')+'>'+
+          '<td class="lc-idx">'+(i+1)+'</td>'+
+          '<td><div class="lc-pn">'+esc(p.name)+'</div><div class="lc-pc">'+esc(p.client)+' · '+esc(p.status)+'</div></td>'+
+          '<td class="lc-dt">'+fmtShort(p.orderDate)+'</td>'+
+          '<td class="r"><input class="lc-vinput" type="number" min="0" step="0.5" data-id="'+p.id+'" value="'+(hasVal?p.value:'')+'" placeholder="—"></td>'+
+          '<td>'+progressHtml+'</td>'+
+          '<td class="c"><input class="lc-early" type="checkbox" data-id="'+p.id+'"'+(p.early?' checked':'')+' title="Build as early as possible and hold in the warehouse"></td>'+
+          '<td class="lc-dt">'+fmtShort(p.requested)+'</td>'+
+          '<td>'+(hasVal&&r.finish?'<div class="lc-comp">'+fmtDate(r.finish)+(r.overflow?' <span class="lc-red">(beyond horizon)</span>':'')+'</div>':'')+
+            '<span class="lc-pill '+(st.cls||'')+'">'+st.txt+'</span>'+runs+tgtNote+storeNote+'</td></tr>';
+      }catch(e){
+        console.error('renderBook: row failed for project', r && r.p && r.p.id, e);
+        rows += '<tr><td colspan="8" class="lc-empty">⚠ Couldn\'t display "'+esc((r&&r.p&&r.p.name)||'this project')+'" — '+esc(e.message)+'</td></tr>';
+      }
     });
     $('lc-body').innerHTML = rows;
-    $('lc-count').textContent  = projects.length;
-    $('lc-valued').textContent = valued+' / '+projects.length;
-    $('lc-risk').textContent   = risk;
-    $('lc-risk').style.color   = risk>0 ? '#c0392b' : 'var(--ink)';
-    $('lc-clears').textContent = lastFinish ? (ovAny?'> ':'')+fmtDate(lastFinish) : '—';
+    try{
+      $('lc-count').textContent  = projects.length;
+      $('lc-valued').textContent = valued+' / '+projects.length;
+      $('lc-risk').textContent   = risk;
+      $('lc-risk').style.color   = risk>0 ? '#c0392b' : 'var(--ink)';
+      $('lc-clears').textContent = lastFinish ? (ovAny?'> ':'')+fmtDate(lastFinish) : '—';
+    }catch(e){
+      console.error('renderBook: totals update failed', e);
+    }
   }
 
   function renderQuote(){
