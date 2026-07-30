@@ -1406,7 +1406,7 @@
   function renderBook(alloc){
     let rows='', risk=0, valued=0, lastFinish=null, ovAny=false;
     if(alloc.result.length===0){
-      rows = '<tr><td colspan="7" class="lc-empty">No active projects in the queue. Projects stay here until their status is Delivered or Completed.</td></tr>';
+      rows = '<tr><td colspan="8" class="lc-empty">No active projects in the queue. Projects stay here until their status is Delivered or Completed.</td></tr>';
     }
     alloc.result.forEach((r,i) => {
       const p = r.p, st = statusFor(r), hasVal = p.value>0;
@@ -1423,7 +1423,7 @@
       const pct = Math.round((p.completion||0)*100);
       const progressHtml = !hasVal ? '<span class="lc-muted">—</span>'
         : (pct > 0
-            ? '<div class="lc-progress-bar"><div class="lc-progress-fill" style="width:'+pct+'%"></div></div><div class="lc-runs">'+pct+'% done · '+lakhFmt(p.remaining)+' left</div>'
+            ? '<div class="lc-progress-bar"><div class="lc-progress-fill" style="width:'+pct+'%"></div></div><div class="lc-runs">'+pct+'% done · '+num(p.remaining)+' left</div>'
             : '<span class="lc-muted">not started</span>');
       rows += '<tr'+(p.early?' class="lc-earlyrow"':'')+'>'+
         '<td class="lc-idx">'+(i+1)+'</td>'+
