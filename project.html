@@ -541,10 +541,19 @@
         Mark delivered
       </button>`;
     }
+    if (canDeliver && project.status === 'Delivered') {
+      // Already delivered — everything the full form captures (date,
+      // delivered-by, notes, checklist) was recorded then. Moving on to
+      // Completed doesn't need any of that re-entered.
+      html += `<button class="btn btn-primary" onclick="markCompleted()" style="background:#16a34a;border-color:#16a34a">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 8l4 4 8-8"/></svg>
+        Mark Completed
+      </button>`;
+    }
     if (isDelivered) {
       html += `<span style="font-size:13px;color:#16a34a;font-weight:500;display:flex;align-items:center;gap:5px">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="width:14px;height:14px"><path d="M2 8l4 4 8-8"/></svg>
-        Delivered ${project.deliveredDate ? '· ' + formatDate(project.deliveredDate) : ''}
+        ${esc(project.status)} ${project.deliveredDate ? '· ' + formatDate(project.deliveredDate) : ''}
       </span>`;
     }
     document.getElementById('topbar-actions').innerHTML = html;
@@ -693,7 +702,15 @@
     const STAGES = ['carpentry','polish','upholstery','packing'];
     const LABELS = { carpentry:'Structure', polish:'Polish', upholstery:'Upholstery', packing:'Packing' };
 
+    const deliveredCount = active.filter(i => i.delivered).length;
+    const deliverySummary = active.length ? `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 20px;background:var(--surface);border-bottom:1px solid var(--border)">
+        <div style="font-size:12.5px;color:var(--ink-2)">${deliveredCount} of ${active.length} items delivered${deliveredCount>0 && deliveredCount<active.length ? ' — partial delivery' : ''}</div>
+        ${deliveredCount<active.length ? `<button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="markAllItemsDelivered()">Mark all delivered</button>` : ''}
+      </div>` : '';
+
     const activeTableHtml = !active.length ? `<div class="empty-small">No active items — see removed items below.</div>` : `
+        ${deliverySummary}
         <table>
           <thead><tr>
             <th>#</th>
@@ -706,6 +723,7 @@
             <th>Upholstery</th>
             <th>Packing</th>
             <th>Status</th>
+            <th title="Has this specific item physically left the factory yet? Independent of the project's own status — lets you track a partial delivery.">Delivered</th>
           </tr></thead>
           <tbody>${active.map((item, i) => {
             const _ovs2 = item.overallStatus || 'Structure';
@@ -731,6 +749,7 @@ ${(function(){
                 }).join('');
               })()}
               <td>${statusCellHtml}</td>
+              <td style="text-align:center"><input type="checkbox" ${item.delivered?'checked':''} onchange="toggleItemDelivered('${item.id}', this.checked)" style="width:16px;height:16px;cursor:pointer" title="Mark this item as physically delivered"></td>
             </tr>`;
           }).join('')}</tbody>
         </table>`;
@@ -1289,6 +1308,65 @@ ${(function(){
       alert('The save did not go through:\n\n' + e.message + '\n\nPlease try again.');
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = 'Confirm delivery'; }
+    }
+  };
+
+  // Once a project is already Delivered, moving to Completed doesn't need
+  // the date/delivered-by/notes/checklist re-entered — that was all
+  // captured when it was first marked delivered. This is deliberately just
+  // a confirm() and a status flip, not a form.
+  window.markCompleted = async function() {
+    if (project.status !== 'Delivered') return;
+    if (!confirm('Mark "' + (project.projectName||'this project') + '" as Completed — fully signed off?')) return;
+    try {
+      await updateDoc(doc(db, 'projects', projectId), {
+        status: 'Completed',
+        updatedAt: serverTimestamp(),
+      });
+      await logProjectActivity(document.getElementById('user-name').textContent + ' marked project as Completed');
+      await syncPublicShare(projectId);
+      project.status = 'Completed';
+      showToast('Project marked as Completed');
+      renderContent();
+    } catch(e) {
+      showToast('Save failed: ' + e.message);
+    }
+  };
+
+  // Tracks whether a specific item has physically left the factory —
+  // independent of the project's own status, so a partial shipment (some
+  // items delivered now, the rest once they're ready) can be recorded
+  // without needing the whole project to move to Delivered.
+  window.toggleItemDelivered = async function(itemId, checked) {
+    try {
+      await updateDoc(doc(db, 'projects', projectId, 'items', itemId), {
+        delivered: checked,
+        deliveredAt: checked ? serverTimestamp() : null
+      });
+      const it = items.find(i => i.id === itemId);
+      if (it) it.delivered = checked;
+      renderTab('items');
+    } catch(e) {
+      showToast('Save failed: ' + e.message);
+    }
+  };
+
+  // The common case — everything goes out together — shouldn't require
+  // touching each item individually. One click marks every active item
+  // delivered at once.
+  window.markAllItemsDelivered = async function() {
+    const undelivered = activeItems().filter(i => !i.delivered);
+    if (!undelivered.length) return;
+    if (!confirm('Mark all ' + undelivered.length + ' remaining item(s) as delivered?')) return;
+    try {
+      await Promise.all(undelivered.map(it =>
+        updateDoc(doc(db, 'projects', projectId, 'items', it.id), { delivered: true, deliveredAt: serverTimestamp() })
+      ));
+      undelivered.forEach(it => { it.delivered = true; });
+      showToast('All items marked delivered');
+      renderTab('items');
+    } catch(e) {
+      showToast('Save failed: ' + e.message);
     }
   };
 
