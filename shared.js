@@ -16,7 +16,7 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js';
 import { getAuth } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
 import {
-  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore,
   doc, getDoc, setDoc
 } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
 
@@ -37,9 +37,24 @@ export const auth = getAuth(app);
 // stay available (from IndexedDB) when the network drops, instead of every
 // page showing an endless loading state. Multi-tab manager lets more than
 // one open tab/PWA window share the same cache without errors.
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-});
+//
+// This can throw SYNCHRONOUSLY in environments where IndexedDB isn't fully
+// available — most notably Safari Private Browsing, and some older iOS
+// versions. Since this file is imported by every page, an uncaught throw
+// here would stop the entire page's JavaScript from ever running: the
+// static HTML would still render, but nothing else would — which looks
+// exactly like "the screen appears but nothing loads". Falling back to a
+// plain in-memory Firestore instance (no offline persistence, but otherwise
+// fully working) keeps the app usable instead of dead on those devices.
+export let db;
+try {
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+  });
+} catch (e) {
+  console.error('Persistent Firestore cache unavailable, falling back to in-memory cache:', e);
+  db = getFirestore(app);
+}
 
 /* ── HTML escaping ──────────────────────────────────────────────────────────
    Escapes &, <, >, and both quote characters — safe for both text content
