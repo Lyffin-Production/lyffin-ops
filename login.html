@@ -376,8 +376,15 @@
   // If already signed in, redirect
   onAuthStateChanged(auth, async (user) => {
     if (user) {
-      const data = await resolveUserDoc(user, 'sales');
-      window.location.href = ROLE_PAGES[data.role] || 'dashboard.html';
+      try {
+        const data = await resolveUserDoc(user, 'sales');
+        window.location.href = ROLE_PAGES[data.role] || 'dashboard.html';
+      } catch (e) {
+        // Never leave the page silently stuck — log it clearly so this is
+        // diagnosable, and let the normal sign-in form stay usable below
+        // rather than the page appearing to do nothing.
+        console.error('Auto sign-in redirect failed:', e);
+      }
     }
   });
 

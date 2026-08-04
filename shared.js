@@ -86,7 +86,15 @@ export function isValidTransition(from, to) {
    existing default (most pages use 'sales'; production/project use 'floor'
    to avoid mis-routing factory-floor accounts before they're provisioned). */
 export async function resolveUserDoc(user, fallbackRole) {
-  const snap = await getDoc(doc(db, 'users', user.uid));
+  let snap;
+  try {
+    snap = await getDoc(doc(db, 'users', user.uid));
+  } catch (e) {
+    // A failed read here (network blip, cold start before the connection is
+    // live, etc.) must never silently strand the caller — every page that
+    // calls this expects a plain object back, not an uncaught rejection.
+    return {};
+  }
   if (snap.exists()) return snap.data();
   if (user.email) {
     try {
