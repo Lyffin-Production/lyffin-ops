@@ -927,13 +927,16 @@
 
   window.saveNewUser = async function() {
     const name  = document.getElementById('au-name').value.trim();
-    const email = document.getElementById('au-email').value.trim();
+    const email = document.getElementById('au-email').value.trim().toLowerCase();
     const role  = document.getElementById('au-role').value;
     if (!name || !email) { alert('Name and email are required'); return; }
     try {
       // Keyed by the invitee's email — when they sign in for the first
       // time, the app matches this against their verified auth email and
       // claims it, creating their real users/{uid} doc with this role.
+      // Lowercased because Firebase Auth always normalizes the signed-in
+      // user's own email to lowercase — a mixed-case key here would never
+      // match at sign-in time, silently failing the whole invite.
       await setDoc(doc(db, 'pendingInvites', email), { name, email, role, createdAt: serverTimestamp() });
       closeAddUser();
       alert('Invite saved. Now create their account in Firebase Authentication with email: ' + email + '\n\nTheir assigned role (' + role + ') will apply automatically the first time they sign in.');

@@ -1,22 +1,119 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function isAuth() { return request.auth != null; }
     function role() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
-    function isAuth() {
-      return request.auth != null;
+    // Any signed-in team member with a recognized role — the app's staff
+    // roles are admin, sales, design, supervisor, floor, qc.
+    function isStaff() {
+      return isAuth() && role() in ['admin','sales','design','supervisor','floor','qc'];
     }
-    match /users/{userId} {
+    function isAdmin() { return isAuth() && role() == 'admin'; }
+
+    // ── Users ──────────────────────────────────────────────────────────
+    match /users/{uid} {
       allow read: if isAuth();
-      allow write: if isAuth() && role() == 'admin';
+      allow update, delete: if isAdmin();
+      // A brand-new user may create ONLY their own doc, and only with the
+      // exact name/role an admin already assigned them via pendingInvites.
+      // This is what makes an invited team member's role take effect on
+      // their first sign-in — without letting anyone grant themselves a
+      // role, since the written role/name must match the invite verbatim
+      // and the invite can only be created by an admin.
+      allow create: if isAdmin()
+        || (isAuth() && request.auth.uid == uid
+            && request.auth.token.email == request.resource.data.email
+            && request.resource.data.role == get(/databases/$(database)/documents/pendingInvites/$(request.auth.token.email)).data.get('role', null)
+            && request.resource.data.name == get(/databases/$(database)/documents/pendingInvites/$(request.auth.token.email)).data.get('name', null));
     }
+
+    // ── Pending invites ────────────────────────────────────────────────
+    // Admin creates one keyed by the invitee's email; the invitee can read
+    // (and thereby claim, via the users/{uid} rule above) only the invite
+    // matching their own verified auth email — never anyone else's.
+    match /pendingInvites/{email} {
+      allow read: if isAdmin() || (isAuth() && request.auth.token.email == email);
+      allow write: if isAdmin();
+    }
+
+    // ── Projects ───────────────────────────────────────────────────────
+    // Internal only — no unauthenticated access. (Customers see status via
+    // the separate publicShares mirror below, never these documents.)
     match /projects/{projectId} {
-      allow read, write: if true;
+      allow read: if isStaff();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin(); // matches the UI: only admins see the delete action
+
       match /items/{itemId} {
-        allow read, write: if true;
+        allow read: if isStaff();
+        allow write: if isStaff();
+      }
+      // Audit trails — appendable by any staff action, but never edited or
+      // erased through the app itself (only cleaned up by an admin deleting
+      // the whole project, which needs delete rights on these too).
+      match /activity/{activityId} {
+        allow read: if isStaff();
+        allow create: if isStaff();
+        allow delete: if isAdmin();
+      }
+      match /dateHistory/{historyId} {
+        allow read: if isStaff();
+        allow create: if isStaff();
+        allow delete: if isAdmin();
       }
     }
+
+    // ── Share tokens (internal bookkeeping) ────────────────────────────
+    // Which token is currently the active/valid one for a given project.
+    // Staff-only — customers never read this; they only ever see the
+    // publicShares/{token} doc the token happens to point at.
+    match /shareTokens/{projectId} {
+      allow read, write: if isStaff();
+    }
+
+    // ── Public client-status mirror (no login required) ───────────────
+    // Keyed by a random share TOKEN, not the project ID — knowing a
+    // project's Firestore ID is not enough to read this; you need the
+    // exact token from a link that was actually shared. `list` is denied
+    // so the collection can never be enumerated to discover valid tokens;
+    // only a `get` by the exact known token works. Expired tokens are
+    // denied at the rules level even if the document still exists.
+    // Contains only the safe, denormalized fields the no-login share page
+    // displays — project name/location/order no/status/handover date and
+    // per-item stage status. Never the real projects/items documents, and
+    // never pricing (that lives only in the admin-only projectFinance).
+    match /publicShares/{token} {
+      // resource == null covers a token that was never valid (or has been
+      // hard-deleted) — that must cleanly evaluate to "doesn't exist" so the
+      // client shows "link not found", not error out into a denial that
+      // looks identical to a revoked/expired link. .get(field, default) is
+      // used instead of plain dot-access so a document that predates one of
+      // these fields doesn't also error into a false denial.
+      allow get: if resource == null ||
+        (resource.data.get('active', true) != false &&
+         (resource.data.get('expiresAt', null) == null || request.time < resource.data.get('expiresAt', null)));
+      allow list: if false;
+      allow write: if isStaff();
+
+      // Each item (including its thumbnail, if any) lives as its own small
+      // document here instead of one big array on the parent — Firestore
+      // caps any single document at 1MB, and a large order's photos could
+      // approach that if they were all crammed into one place. Read access
+      // mirrors the parent token's own active/expiry check via get(), so a
+      // revoked or expired link loses access to the items too, not just the
+      // summary doc.
+      match /items/{itemId} {
+        allow list, get: if
+          get(/databases/$(database)/documents/publicShares/$(token)).data.get('active', true) != false &&
+          (get(/databases/$(database)/documents/publicShares/$(token)).data.get('expiresAt', null) == null ||
+           request.time < get(/databases/$(database)/documents/publicShares/$(token)).data.get('expiresAt', null));
+        allow write: if isStaff();
+      }
+    }
+
     match /complaints/{id} {
       allow read: if isAuth();
       allow write: if isAuth() && role() in ['admin','sales','qc','supervisor'];
@@ -26,15 +123,34 @@ service cloud.firestore {
       allow write: if isAuth() && role() in ['admin','qc','supervisor'];
     }
 
-    // ── Capacity Ledger (admin only) ──────────────────────────────────
+    // ── Tasks / follow-ups ───────────────────────────────────────────────
+    // Lightweight accountability items (a task text, an owner, a due date)
+    // attached to a project. Any staff member can create/complete one —
+    // this is a coordination tool, not a sensitive-data collection, so it's
+    // deliberately not role-restricted the way complaints/qc_reports are.
+    match /tasks/{id} {
+      allow read: if isStaff();
+      allow write: if isStaff();
+    }
+
+    // ── Client communication log ─────────────────────────────────────────
+    // A record of calls/messages with a client per project — who spoke to
+    // them, when, what was said — kept internal (never shown on the
+    // no-login publicShares page).
+    match /commLogs/{id} {
+      allow read: if isStaff();
+      allow write: if isStaff();
+    }
+
+    // ── Capacity Ledger (admin only) ────────────────────────────────────
     // Production output + buffer settings.
     match /config/{docId} {
-      allow read, write: if isAuth() && role() == 'admin';
+      allow read, write: if isAdmin();
     }
-    // Per-project production values (pricing) — kept out of the public
-    // /projects docs so only admins can read or write them.
+    // Per-project production values (pricing) — kept out of the projects
+    // docs so only admins can read or write them.
     match /projectFinance/{projectId} {
-      allow read, write: if isAuth() && role() == 'admin';
+      allow read, write: if isAdmin();
     }
   }
 }

@@ -905,11 +905,11 @@
 
           <div class="lc-hint" style="margin-top:10px;padding:10px;background:var(--surface);border-radius:6px">
             <b>Minimum production days, by project size:</b><br>
-            0–15 units → 30–45 days<br>
-            15–30 units → 45–60 days<br>
-            30–50 units → 60–75 days<br>
-            50+ units → 75–90 days<br>
-            A bigger job simply needs longer, whatever the factory's day estimate says — the schedule never goes faster than the low end of its tier, and uses the factory's own number when it's higher than that.
+            0–15 units → 50 days<br>
+            15–30 units → 65 days<br>
+            30–50 units → 80 days<br>
+            50+ units → 90 days<br>
+            A bigger job simply needs longer, whatever the factory's day estimate says — the schedule never goes faster than its tier's minimum, and uses the factory's own number when it's higher than that.
           </div>
 
           <button id="lc-save" class="lc-btn">Save settings</button>
@@ -1062,13 +1062,12 @@
     return s > 0 ? s : 0.0001;
   }
   // Bigger jobs simply need longer, whatever the factory's own day estimate
-  // says — this is the floor under that. Returns the low end of the
-  // project's size tier.
+  // says — this is the floor under that.
   function tierMinDays(value){
-    if(value <= 15) return 30;
-    if(value <= 30) return 45;
-    if(value <= 50) return 60;
-    return 75;
+    if(value <= 15) return 50;
+    if(value <= 30) return 65;
+    if(value <= 50) return 80;
+    return 90;
   }
   // The number of days actually used to schedule a project: the factory's
   // own estimate when there is one, but never less than its value-tier
