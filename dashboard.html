@@ -863,6 +863,19 @@
         <div style="font-size:14px;font-weight:500">My tasks</div>
         <span id="my-tasks-dot" style="display:none;width:8px;height:8px;border-radius:50%;background:#c0392b"></span>
         <span id="my-tasks-count" style="font-size:11px;color:var(--ink-3);margin-left:auto"></span>
+        <button onclick="toggleAddTaskForm()" style="font-size:12px;color:var(--gold);background:none;border:none;cursor:pointer;font-weight:500">+ Add task</button>
+      </div>
+      <div id="add-task-form" style="display:none;padding:14px 20px;border-bottom:1px solid var(--surface-2);background:var(--surface)">
+        <input type="text" id="nt-text" placeholder="What needs to happen?" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--font-sans);margin-bottom:8px;box-sizing:border-box">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <select id="nt-owner" style="flex:1;min-width:120px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--font-sans);background:var(--white)"><option value="">Owner…</option></select>
+          <input type="date" id="nt-due" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--font-sans)">
+          <select id="nt-project" style="flex:2;min-width:160px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--font-sans);background:var(--white)"><option value="">General task (no project)</option></select>
+        </div>
+        <div style="margin-top:8px;display:flex;gap:8px">
+          <button onclick="submitNewTask()" style="font-size:12px;padding:6px 14px;border-radius:6px;border:none;background:var(--ink);color:var(--white);cursor:pointer;font-weight:500">Add task</button>
+          <button onclick="toggleAddTaskForm()" style="font-size:12px;padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:none;cursor:pointer">Cancel</button>
+        </div>
       </div>
       <div id="my-tasks-list"></div>
     </div>
@@ -1084,31 +1097,25 @@
   async function loadMyTasks() {
     if (!currentUserName) return;
     const card = document.getElementById('my-tasks-card');
-    // TEMPORARY DEBUG — remove once the missing-card issue is resolved.
-    console.log('[MY-TASKS-DEBUG] currentUserName =', JSON.stringify(currentUserName));
-    try {
-      const allOpenSnap = await getDocs(query(collection(db, 'tasks'), where('status', '==', 'open')));
-      console.log('[MY-TASKS-DEBUG] all open tasks in the whole app:', allOpenSnap.docs.map(d => ({
-        text: d.data().text, ownerName: JSON.stringify(d.data().ownerName), status: d.data().status
-      })));
-    } catch (e) {
-      console.log('[MY-TASKS-DEBUG] could not even read all open tasks:', e.message);
-    }
+    card.style.display = ''; // always visible now — it also holds "+ Add task"
     try {
       const snap = await getDocs(query(
         collection(db, 'tasks'),
         where('ownerName', '==', currentUserName),
         where('status', '==', 'open')
       ));
-      console.log('[MY-TASKS-DEBUG] matched tasks for this exact name:', snap.docs.length);
       const tasks = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
-      if (!tasks.length) { card.style.display = 'none'; return; }
-      card.style.display = '';
+      if (!tasks.length) {
+        document.getElementById('my-tasks-list').innerHTML = '<div class="empty-small" style="padding:16px 20px">No open tasks.</div>';
+        document.getElementById('my-tasks-count').textContent = '';
+        document.getElementById('my-tasks-dot').style.display = 'none';
+        return;
+      }
       renderMyTasks(tasks);
       markMyTasksSeen(tasks);
     } catch (e) {
       console.error('loadMyTasks failed:', e.message);
-      card.style.display = 'none';
+      document.getElementById('my-tasks-list').innerHTML = '<div class="empty-small" style="padding:16px 20px">Couldn\'t load tasks.</div>';
     }
   }
 
@@ -1152,6 +1159,64 @@
       await Promise.all(unseen.map(t => updateDoc(doc(db, 'tasks', t.id), { seen: true })));
     } catch (e) { /* non-critical — dot will just show again next load */ }
   }
+
+  // A task doesn't have to belong to a project — it can be a general,
+  // company-level thing, or something tied to an old project you don't
+  // want to reopen just to leave a note. This form covers both, using the
+  // exact same "tasks" collection everything else already reads from.
+  let addTaskFormLoaded = false;
+  window.toggleAddTaskForm = function() {
+    const form = document.getElementById('add-task-form');
+    const opening = form.style.display === 'none';
+    form.style.display = opening ? 'block' : 'none';
+    if (opening && !addTaskFormLoaded) {
+      addTaskFormLoaded = true;
+      populateNewTaskDropdowns();
+    }
+  };
+
+  async function populateNewTaskDropdowns() {
+    try {
+      const snap = await getDocs(collection(db, 'users'));
+      const users = snap.docs.map(d => d.data()).filter(u => u.name);
+      document.getElementById('nt-owner').innerHTML = '<option value="">Owner…</option>' +
+        users.map(u => '<option>' + esc(u.name) + '</option>').join('');
+    } catch (e) { /* dropdown just stays at Owner… */ }
+
+    // allProjects already holds every project regardless of status — old,
+    // delivered, completed, everything — exactly what's needed for a task
+    // that references a project without belonging to today's active work.
+    const sorted = allProjects.slice().sort((a, b) => (a.projectName || '').localeCompare(b.projectName || ''));
+    document.getElementById('nt-project').innerHTML = '<option value="">General task (no project)</option>' +
+      sorted.map(p => '<option value="' + p.id + '">' + esc(p.projectName || '(unnamed)') + (p.status ? ' — ' + esc(p.status) : '') + '</option>').join('');
+  }
+
+  window.submitNewTask = async function() {
+    const textEl = document.getElementById('nt-text');
+    const text = textEl.value.trim();
+    if (!text) { alert('Enter what needs to happen'); return; }
+    const ownerName = document.getElementById('nt-owner').value;
+    const dueDate = document.getElementById('nt-due').value;
+    const projectId = document.getElementById('nt-project').value;
+    const project = projectId ? allProjects.find(p => p.id === projectId) : null;
+    try {
+      await addDoc(collection(db, 'tasks'), {
+        projectId: projectId || '', projectName: project ? (project.projectName || '') : 'General',
+        text, ownerName: ownerName || '', dueDate: dueDate || '',
+        status: 'open', seen: false,
+        createdBy: currentUserName || '',
+        createdAt: serverTimestamp()
+      });
+      textEl.value = '';
+      document.getElementById('nt-owner').value = '';
+      document.getElementById('nt-due').value = '';
+      document.getElementById('nt-project').value = '';
+      document.getElementById('add-task-form').style.display = 'none';
+      loadMyTasks();
+    } catch (e) {
+      alert('Could not add task: ' + e.message);
+    }
+  };
 
   function loadProjects() {
     // Real-time complaints count listener — sales only see their assigned projects
