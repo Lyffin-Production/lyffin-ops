@@ -363,6 +363,17 @@
       </div>
     </div>
 
+    <!-- Every open task across every project, grouped by who it's assigned to -->
+    <div class="section-card">
+      <div class="section-header">
+        <div class="section-title">Team tasks</div>
+        <span style="font-size:11px;color:var(--ink-3)" id="team-tasks-count"></span>
+      </div>
+      <div class="section-body" id="team-tasks-section" style="padding:0">
+        <div class="empty-small">Loading…</div>
+      </div>
+    </div>
+
     <!-- Root causes + Upcoming deliveries -->
     <div class="two-col">
       <div class="section-card">
@@ -492,7 +503,7 @@
   import { onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
   import {
     collection, getDocs, onSnapshot,
-    query, orderBy, limit, doc, getDoc, setDoc, serverTimestamp, deleteDoc
+    query, orderBy, limit, where, doc, getDoc, setDoc, updateDoc, serverTimestamp, deleteDoc
   } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
   import { db, auth, esc, resolveUserDoc, initOfflineBanner } from './shared.js';
 
@@ -538,6 +549,7 @@
     renderGantt(projects);
     renderMonthlyAnalytics(projects);
     loadTeam();
+    loadTeamTasks();
 
     document.getElementById('page-loading').style.display = 'none';
   }
@@ -839,6 +851,100 @@
   }
 
   // ── TEAM MANAGEMENT ───────────────────────────────────────────────────────────
+  // ── TEAM TASKS (admin overview across everyone) ──────────────────────────
+  // Same "tasks" collection each person's own dashboard reads from — this
+  // just drops the per-user filter so an admin sees everyone's at once,
+  // grouped by who it's assigned to, with the ability to close out or
+  // remove one directly instead of chasing each person individually.
+  async function loadTeamTasks() {
+    const el = document.getElementById('team-tasks-section');
+    try {
+      const snap = await getDocs(query(collection(db, 'tasks'), where('status', '==', 'open')));
+      const tasks = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+      renderTeamTasks(tasks);
+    } catch (e) {
+      console.error('loadTeamTasks failed:', e);
+      el.innerHTML = '<div class="empty-small">Couldn\'t load tasks: ' + esc(e.message) + '</div>';
+    }
+  }
+
+  function renderTeamTasks(tasks) {
+    const el = document.getElementById('team-tasks-section');
+    const countEl = document.getElementById('team-tasks-count');
+    if (!tasks.length) {
+      el.innerHTML = '<div class="empty-small">No open tasks right now.</div>';
+      countEl.textContent = '';
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const overdueCount = tasks.filter(t => t.dueDate && t.dueDate < today).length;
+    countEl.textContent = tasks.length + (tasks.length === 1 ? ' open task' : ' open tasks') +
+      (overdueCount ? ' · ' + overdueCount + ' overdue' : '');
+
+    // Group by owner, unassigned last, each group sorted by due date.
+    const groups = {};
+    tasks.forEach(t => {
+      const key = t.ownerName || 'Unassigned';
+      (groups[key] = groups[key] || []).push(t);
+    });
+    const ownerNames = Object.keys(groups).sort((a, b) => {
+      if (a === 'Unassigned') return 1;
+      if (b === 'Unassigned') return -1;
+      return a.localeCompare(b);
+    });
+
+    el.innerHTML = ownerNames.map(owner => {
+      const list = groups[owner].slice().sort((a, b) => {
+        const da = a.dueDate || '9999-99-99', db_ = b.dueDate || '9999-99-99';
+        return da < db_ ? -1 : da > db_ ? 1 : 0;
+      });
+      const rows = list.map(t => {
+        const overdue = t.dueDate && t.dueDate < today;
+        const dueLabel = t.dueDate
+          ? new Date(t.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
+          : 'no due date';
+        return '<div style="display:flex;align-items:center;gap:10px;padding:9px 20px;border-bottom:1px solid var(--surface-2)">' +
+          '<label style="flex-shrink:0;cursor:pointer"><input type="checkbox" onchange="markTeamTaskDone(\'' + t.id + '\', this)" style="width:15px;height:15px;cursor:pointer"></label>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:13px">' + esc(t.text || '') + '</div>' +
+            '<div style="font-size:11px;color:var(--ink-3);margin-top:2px">' + esc(t.projectName || 'Project') + ' · due ' + dueLabel +
+              (overdue ? ' <span style="color:#c0392b;font-weight:600">OVERDUE</span>' : '') +
+            '</div>' +
+          '</div>' +
+          '<button onclick="deleteTeamTask(\'' + t.id + '\', this)" title="Delete" style="flex-shrink:0;background:none;border:none;color:var(--ink-3);cursor:pointer;font-size:13px;padding:2px 6px">✕</button>' +
+        '</div>';
+      }).join('');
+      return '<div style="padding:10px 20px 4px;font-size:11px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;background:var(--surface)">' +
+        esc(owner) + ' · ' + list.length + '</div>' + rows;
+    }).join('');
+  }
+
+  window.markTeamTaskDone = async function(taskId, checkboxEl) {
+    checkboxEl.disabled = true;
+    try {
+      await updateDoc(doc(db, 'tasks', taskId), {
+        status: 'done', completedAt: serverTimestamp(),
+        completedBy: document.getElementById('user-name') ? document.getElementById('user-name').textContent : 'Admin'
+      });
+      loadTeamTasks();
+    } catch (e) {
+      alert('Could not update task: ' + e.message);
+      checkboxEl.disabled = false;
+    }
+  };
+
+  window.deleteTeamTask = async function(taskId, btn) {
+    if (!confirm('Delete this task?')) return;
+    btn.disabled = true;
+    try {
+      await deleteDoc(doc(db, 'tasks', taskId));
+      loadTeamTasks();
+    } catch (e) {
+      alert('Could not delete task: ' + e.message);
+      btn.disabled = false;
+    }
+  };
+
   async function loadTeam() {
     const { getDocs, collection: col } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
     const snap = await getDocs(col(db, 'users'));
