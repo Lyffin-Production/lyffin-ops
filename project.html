@@ -163,6 +163,9 @@
   .task-add-form input, .task-add-form select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; font-family: var(--font-sans); color: var(--ink); background: var(--white); }
   .task-add-form select { max-width: 140px; }
   .task-add-form input[type="date"] { max-width: 140px; }
+  .task-owner-picker { width: 100%; display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--white); max-height: 100px; overflow-y: auto; }
+  .task-owner-chk { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .task-owner-chk input { width: 14px; height: 14px; cursor: pointer; margin: 0; }
 
   /* FOLLOW-UPS: communication log */
   .log-row { padding: 12px 20px; border-bottom: 1px solid var(--surface-2); }
@@ -1091,7 +1094,9 @@ ${(function(){
     try {
       const snap = await getDocs(collection(db, 'users'));
       const users = snap.docs.map(d => d.data()).filter(u => u.name);
-      _taskOwnerOptionsCache = users.map(u => '<option value="' + esc(u.name) + '">' + esc(u.name) + '</option>').join('');
+      _taskOwnerOptionsCache = users.map(u =>
+        '<label class="task-owner-chk"><input type="checkbox" value="' + esc(u.name) + '"> ' + esc(u.name) + '</label>'
+      ).join('');
     } catch (e) { _taskOwnerOptionsCache = ''; }
     return _taskOwnerOptionsCache;
   }
@@ -1123,12 +1128,13 @@ ${(function(){
     const taskRows = sorted.length ? sorted.map(t => {
       const overdue = t.status !== 'done' && t.dueDate && t.dueDate < today;
       const done = t.status === 'done';
+      const owners = (t.ownerNames && t.ownerNames.length) ? t.ownerNames.map(esc).join(', ') : (t.ownerName ? esc(t.ownerName) : 'Unassigned');
       return '<div class="task-row' + (done ? ' task-done' : '') + '">' +
         '<label class="task-check"><input type="checkbox" ' + (done ? 'checked' : '') + ' onchange="toggleTask(\'' + t.id + '\', this.checked)"><span></span></label>' +
         '<div class="task-body">' +
           '<div class="task-text">' + esc(t.text || '') + '</div>' +
           '<div class="task-meta">' +
-            (t.ownerName ? esc(t.ownerName) : 'Unassigned') +
+            owners +
             (t.dueDate ? ' · due ' + formatDate(t.dueDate) : '') +
             (overdue ? ' <span class="task-overdue">OVERDUE</span>' : '') +
           '</div>' +
@@ -1152,7 +1158,7 @@ ${(function(){
         <div id="task-list">${taskRows}</div>
         <div class="task-add-form">
           <input type="text" id="new-task-text" placeholder="What needs to happen?">
-          <select id="new-task-owner"><option value="">Owner…</option>${ownerOpts}</select>
+          <div class="task-owner-picker" id="new-task-owners">${ownerOpts}</div>
           <input type="date" id="new-task-due">
           <button class="btn btn-primary" onclick="addTask()">Add task</button>
         </div>
@@ -1177,21 +1183,21 @@ ${(function(){
 
   window.addTask = async function() {
     const textEl = document.getElementById('new-task-text');
-    const ownerEl = document.getElementById('new-task-owner');
     const dueEl = document.getElementById('new-task-due');
     const text = textEl.value.trim();
     if (!text) { showToast('Enter what needs to happen'); return; }
-    const ownerName = ownerEl.value;
+    const ownerNames = Array.from(document.querySelectorAll('#new-task-owners input:checked')).map(c => c.value);
     const dueDate = dueEl.value;
     try {
       await addDoc(collection(db, 'tasks'), {
         projectId, projectName: project.projectName || '',
-        text, ownerName: ownerName || '', dueDate: dueDate || '',
-        status: 'open', seen: false,
+        text, ownerNames, dueDate: dueDate || '',
+        status: 'open', seenBy: [],
         createdBy: document.getElementById('user-name').textContent,
         createdAt: serverTimestamp()
       });
-      await logProjectActivity((document.getElementById('user-name').textContent) + ' added a task: ' + text);
+      await logProjectActivity((document.getElementById('user-name').textContent) + ' added a task: ' + text +
+        (ownerNames.length ? ' (assigned to ' + ownerNames.join(', ') + ')' : ''));
       loadFollowups();
     } catch (e) {
       showToast('Save failed: ' + e.message);

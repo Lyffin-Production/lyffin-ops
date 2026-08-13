@@ -881,11 +881,13 @@
     countEl.textContent = tasks.length + (tasks.length === 1 ? ' open task' : ' open tasks') +
       (overdueCount ? ' · ' + overdueCount + ' overdue' : '');
 
-    // Group by owner, unassigned last, each group sorted by due date.
+    // Group by EACH owner — a task with more than one assignee shows up
+    // under every one of their names, so nobody's workload looks lighter
+    // than it actually is just because someone else shares the task.
     const groups = {};
     tasks.forEach(t => {
-      const key = t.ownerName || 'Unassigned';
-      (groups[key] = groups[key] || []).push(t);
+      const owners = (t.ownerNames && t.ownerNames.length) ? t.ownerNames : (t.ownerName ? [t.ownerName] : ['Unassigned']);
+      owners.forEach(owner => { (groups[owner] = groups[owner] || []).push(t); });
     });
     const ownerNames = Object.keys(groups).sort((a, b) => {
       if (a === 'Unassigned') return 1;
@@ -903,12 +905,14 @@
         const dueLabel = t.dueDate
           ? new Date(t.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
           : 'no due date';
+        const others = ((t.ownerNames && t.ownerNames.length) ? t.ownerNames : (t.ownerName ? [t.ownerName] : [])).filter(n => n !== owner);
         return '<div style="display:flex;align-items:center;gap:10px;padding:9px 20px;border-bottom:1px solid var(--surface-2)">' +
           '<label style="flex-shrink:0;cursor:pointer"><input type="checkbox" onchange="markTeamTaskDone(\'' + t.id + '\', this)" style="width:15px;height:15px;cursor:pointer"></label>' +
           '<div style="flex:1;min-width:0">' +
             '<div style="font-size:13px">' + esc(t.text || '') + '</div>' +
-            '<div style="font-size:11px;color:var(--ink-3);margin-top:2px">' + esc(t.projectName || 'Project') + ' · due ' + dueLabel +
+            '<div style="font-size:11px;color:var(--ink-3);margin-top:2px">' + esc(t.projectName || 'General') + ' · due ' + dueLabel +
               (overdue ? ' <span style="color:#c0392b;font-weight:600">OVERDUE</span>' : '') +
+              (others.length ? ' · with ' + others.map(esc).join(', ') : '') +
             '</div>' +
           '</div>' +
           '<button onclick="deleteTeamTask(\'' + t.id + '\', this)" title="Delete" style="flex-shrink:0;background:none;border:none;color:var(--ink-3);cursor:pointer;font-size:13px;padding:2px 6px">✕</button>' +

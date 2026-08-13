@@ -868,7 +868,7 @@
       <div id="add-task-form" style="display:none;padding:14px 20px;border-bottom:1px solid var(--surface-2);background:var(--surface)">
         <input type="text" id="nt-text" placeholder="What needs to happen?" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--font-sans);margin-bottom:8px;box-sizing:border-box">
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <select id="nt-owner" style="flex:1;min-width:120px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--font-sans);background:var(--white)"><option value="">Owner…</option></select>
+          <div id="nt-owners" style="flex:1;min-width:160px;display:flex;flex-wrap:wrap;gap:4px 12px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--white);max-height:90px;overflow-y:auto;font-size:12.5px"></div>
           <input type="date" id="nt-due" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--font-sans)">
           <select id="nt-project" style="flex:2;min-width:160px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--font-sans);background:var(--white)"><option value="">General task (no project)</option></select>
         </div>
@@ -1101,7 +1101,7 @@
     try {
       const snap = await getDocs(query(
         collection(db, 'tasks'),
-        where('ownerName', '==', currentUserName),
+        where('ownerNames', 'array-contains', currentUserName),
         where('status', '==', 'open')
       ));
       const tasks = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
@@ -1125,7 +1125,7 @@
       const da = a.dueDate || '9999-99-99', db_ = b.dueDate || '9999-99-99';
       return da < db_ ? -1 : da > db_ ? 1 : 0;
     });
-    const unseenCount = tasks.filter(t => t.seen === false).length;
+    const unseenCount = tasks.filter(t => !(t.seenBy || []).includes(currentUserName)).length;
     document.getElementById('my-tasks-dot').style.display = unseenCount > 0 ? '' : 'none';
     document.getElementById('my-tasks-count').textContent = tasks.length + (tasks.length === 1 ? ' task' : ' tasks');
 
@@ -1134,11 +1134,13 @@
       const dueLabel = t.dueDate
         ? new Date(t.dueDate).toLocaleDateString('en-IN', { day:'2-digit', month:'short' })
         : 'no due date';
-      return '<div class="mt-row" onclick="goToTaskProject(\'' + esc(t.projectId) + '\')">' +
+      const others = (t.ownerNames || []).filter(n => n !== currentUserName);
+      return '<div class="mt-row" onclick="goToTaskProject(\'' + esc(t.projectId||'') + '\')">' +
         '<div class="mt-body">' +
           '<div class="mt-text">' + esc(t.text || '') + '</div>' +
-          '<div class="mt-meta">' + esc(t.projectName || 'Project') + ' · due ' + dueLabel +
+          '<div class="mt-meta">' + esc(t.projectName || 'General') + ' · due ' + dueLabel +
             (overdue ? ' <span class="mt-overdue">OVERDUE</span>' : '') +
+            (others.length ? ' · with ' + others.map(esc).join(', ') : '') +
           '</div>' +
         '</div>' +
       '</div>';
@@ -1146,17 +1148,21 @@
   }
 
   window.goToTaskProject = function(projectId) {
+    if (!projectId) return; // a general task has no project page to open
     window.location.href = 'project.html?id=' + projectId + '&tab=followups';
   };
 
-  // Marks any newly-assigned (unseen) tasks as seen now that they're
-  // actually showing in this list — clears the red dot without needing a
-  // separate "mark as read" click.
+  // Marks any newly-assigned (unseen) tasks as seen, for THIS person
+  // specifically — with multiple assignees, one person viewing their
+  // dashboard shouldn't clear the dot for someone else who hasn't looked
+  // yet, so this appends to seenBy rather than flipping one shared flag.
   async function markMyTasksSeen(tasks) {
-    const unseen = tasks.filter(t => t.seen === false);
+    const unseen = tasks.filter(t => !(t.seenBy || []).includes(currentUserName));
     if (!unseen.length) return;
     try {
-      await Promise.all(unseen.map(t => updateDoc(doc(db, 'tasks', t.id), { seen: true })));
+      await Promise.all(unseen.map(t =>
+        updateDoc(doc(db, 'tasks', t.id), { seenBy: (t.seenBy || []).concat(currentUserName) })
+      ));
     } catch (e) { /* non-critical — dot will just show again next load */ }
   }
 
@@ -1179,9 +1185,10 @@
     try {
       const snap = await getDocs(collection(db, 'users'));
       const users = snap.docs.map(d => d.data()).filter(u => u.name);
-      document.getElementById('nt-owner').innerHTML = '<option value="">Owner…</option>' +
-        users.map(u => '<option>' + esc(u.name) + '</option>').join('');
-    } catch (e) { /* dropdown just stays at Owner… */ }
+      document.getElementById('nt-owners').innerHTML = users.map(u =>
+        '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap"><input type="checkbox" value="' + esc(u.name) + '" style="width:14px;height:14px;cursor:pointer;margin:0"> ' + esc(u.name) + '</label>'
+      ).join('');
+    } catch (e) { /* picker just stays empty */ }
 
     // allProjects already holds every project regardless of status — old,
     // delivered, completed, everything — exactly what's needed for a task
@@ -1195,20 +1202,20 @@
     const textEl = document.getElementById('nt-text');
     const text = textEl.value.trim();
     if (!text) { alert('Enter what needs to happen'); return; }
-    const ownerName = document.getElementById('nt-owner').value;
+    const ownerNames = Array.from(document.querySelectorAll('#nt-owners input:checked')).map(c => c.value);
     const dueDate = document.getElementById('nt-due').value;
     const projectId = document.getElementById('nt-project').value;
     const project = projectId ? allProjects.find(p => p.id === projectId) : null;
     try {
       await addDoc(collection(db, 'tasks'), {
         projectId: projectId || '', projectName: project ? (project.projectName || '') : 'General',
-        text, ownerName: ownerName || '', dueDate: dueDate || '',
-        status: 'open', seen: false,
+        text, ownerNames, dueDate: dueDate || '',
+        status: 'open', seenBy: [],
         createdBy: currentUserName || '',
         createdAt: serverTimestamp()
       });
       textEl.value = '';
-      document.getElementById('nt-owner').value = '';
+      document.querySelectorAll('#nt-owners input:checked').forEach(c => c.checked = false);
       document.getElementById('nt-due').value = '';
       document.getElementById('nt-project').value = '';
       document.getElementById('add-task-form').style.display = 'none';
