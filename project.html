@@ -163,9 +163,16 @@
   .task-add-form input, .task-add-form select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; font-family: var(--font-sans); color: var(--ink); background: var(--white); }
   .task-add-form select { max-width: 140px; }
   .task-add-form input[type="date"] { max-width: 140px; }
-  .task-owner-picker { width: 100%; display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--white); max-height: 100px; overflow-y: auto; }
-  .task-owner-chk { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--ink); cursor: pointer; white-space: nowrap; }
-  .task-owner-chk input { width: 14px; height: 14px; cursor: pointer; margin: 0; }
+  .ms-dd { position: relative; width: 100%; }
+  .ms-dd-trigger { width: 100%; text-align: left; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; font-family: var(--font-sans); background: var(--white); color: var(--ink); cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 6px; box-sizing: border-box; }
+  .ms-dd-trigger span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ms-dd-trigger .ms-dd-caret { color: var(--ink-3); font-size: 11px; flex-shrink: 0; }
+  .ms-dd-trigger.ms-placeholder span:first-child { color: var(--ink-3); }
+  .ms-dd-panel { display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 50; background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 4px 16px rgba(0,0,0,0.15); max-height: 210px; overflow-y: auto; padding: 6px 0; }
+  .ms-dd-panel.open { display: block; }
+  .ms-dd-item { display: flex; align-items: center; gap: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
+  .ms-dd-item:hover { background: var(--surface); }
+  .ms-dd-item input { width: 15px; height: 15px; cursor: pointer; margin: 0; flex-shrink: 0; }
 
   /* FOLLOW-UPS: communication log */
   .log-row { padding: 12px 20px; border-bottom: 1px solid var(--surface-2); }
@@ -1095,7 +1102,7 @@ ${(function(){
       const snap = await getDocs(collection(db, 'users'));
       const users = snap.docs.map(d => d.data()).filter(u => u.name);
       _taskOwnerOptionsCache = users.map(u =>
-        '<label class="task-owner-chk"><input type="checkbox" value="' + esc(u.name) + '"> ' + esc(u.name) + '</label>'
+        '<label class="ms-dd-item"><input type="checkbox" value="' + esc(u.name) + '" onchange="updateMsDropdownLabel(\'new-task-owners\')"> ' + esc(u.name) + '</label>'
       ).join('');
     } catch (e) { _taskOwnerOptionsCache = ''; }
     return _taskOwnerOptionsCache;
@@ -1158,7 +1165,10 @@ ${(function(){
         <div id="task-list">${taskRows}</div>
         <div class="task-add-form">
           <input type="text" id="new-task-text" placeholder="What needs to happen?">
-          <div class="task-owner-picker" id="new-task-owners">${ownerOpts}</div>
+          <div class="ms-dd" id="new-task-owners">
+            <button type="button" class="ms-dd-trigger ms-placeholder" onclick="toggleMsDropdown('new-task-owners')"><span>Assign to…</span><span class="ms-dd-caret">▾</span></button>
+            <div class="ms-dd-panel">${ownerOpts}</div>
+          </div>
           <input type="date" id="new-task-due">
           <button class="btn btn-primary" onclick="addTask()">Add task</button>
         </div>
@@ -1180,6 +1190,35 @@ ${(function(){
         </div>
       </div>`;
   }
+
+  // Reusable "closed dropdown that opens into a checklist" — used anywhere
+  // a task needs multiple assignees picked, without the checkbox list
+  // sitting open and taking up space the whole time.
+  window.toggleMsDropdown = function(containerId) {
+    const panel = document.querySelector('#' + containerId + ' .ms-dd-panel');
+    if (!panel) return;
+    const isOpen = panel.classList.contains('open');
+    document.querySelectorAll('.ms-dd-panel.open').forEach(p => p.classList.remove('open'));
+    if (!isOpen) panel.classList.add('open');
+  };
+  window.updateMsDropdownLabel = function(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const trigger = container.querySelector('.ms-dd-trigger span:first-child');
+    const checked = Array.from(container.querySelectorAll('input:checked')).map(c => c.value);
+    if (!checked.length) {
+      trigger.textContent = 'Assign to…';
+      trigger.parentElement.classList.add('ms-placeholder');
+    } else {
+      trigger.textContent = checked.join(', ');
+      trigger.parentElement.classList.remove('ms-placeholder');
+    }
+  };
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.ms-dd')) {
+      document.querySelectorAll('.ms-dd-panel.open').forEach(p => p.classList.remove('open'));
+    }
+  });
 
   window.addTask = async function() {
     const textEl = document.getElementById('new-task-text');

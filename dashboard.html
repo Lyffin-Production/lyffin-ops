@@ -748,6 +748,18 @@
     .bn-item { font-size: 9px; gap: 2px; }
     .bn-item svg { width: 18px; height: 18px; }
   }
+
+  /* Multi-assignee dropdown, used on the Add task form */
+  .ms-dd { position: relative; }
+  .ms-dd-trigger { width: 100%; text-align: left; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: var(--font-sans); background: var(--white); color: var(--ink); cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 6px; box-sizing: border-box; }
+  .ms-dd-trigger span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ms-dd-trigger .ms-dd-caret { color: var(--ink-3); font-size: 11px; flex-shrink: 0; }
+  .ms-dd-trigger.ms-placeholder span:first-child { color: var(--ink-3); }
+  .ms-dd-panel { display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 50; background: var(--white); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); max-height: 210px; overflow-y: auto; padding: 6px 0; }
+  .ms-dd-panel.open { display: block; }
+  .ms-dd-item { display: flex; align-items: center; gap: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
+  .ms-dd-item:hover { background: var(--surface); }
+  .ms-dd-item input { width: 15px; height: 15px; cursor: pointer; margin: 0; flex-shrink: 0; }
 </style>
 </head>
 <body>
@@ -868,7 +880,10 @@
       <div id="add-task-form" style="display:none;padding:14px 20px;border-bottom:1px solid var(--surface-2);background:var(--surface)">
         <input type="text" id="nt-text" placeholder="What needs to happen?" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--font-sans);margin-bottom:8px;box-sizing:border-box">
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <div id="nt-owners" style="flex:1;min-width:160px;display:flex;flex-wrap:wrap;gap:4px 12px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--white);max-height:90px;overflow-y:auto;font-size:12.5px"></div>
+          <div class="ms-dd" id="nt-owners" style="flex:1;min-width:160px">
+            <button type="button" class="ms-dd-trigger ms-placeholder" onclick="toggleMsDropdown('nt-owners')"><span>Assign to…</span><span class="ms-dd-caret">▾</span></button>
+            <div class="ms-dd-panel"></div>
+          </div>
           <input type="date" id="nt-due" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--font-sans)">
           <select id="nt-project" style="flex:2;min-width:160px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--font-sans);background:var(--white)"><option value="">General task (no project)</option></select>
         </div>
@@ -1181,12 +1196,41 @@
     }
   };
 
+  // Reusable "closed dropdown that opens into a checklist" — used for
+  // picking multiple task assignees without the list sitting open and
+  // taking up space the whole time.
+  window.toggleMsDropdown = function(containerId) {
+    const panel = document.querySelector('#' + containerId + ' .ms-dd-panel');
+    if (!panel) return;
+    const isOpen = panel.classList.contains('open');
+    document.querySelectorAll('.ms-dd-panel.open').forEach(p => p.classList.remove('open'));
+    if (!isOpen) panel.classList.add('open');
+  };
+  window.updateMsDropdownLabel = function(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const trigger = container.querySelector('.ms-dd-trigger span:first-child');
+    const checked = Array.from(container.querySelectorAll('input:checked')).map(c => c.value);
+    if (!checked.length) {
+      trigger.textContent = 'Assign to…';
+      trigger.parentElement.classList.add('ms-placeholder');
+    } else {
+      trigger.textContent = checked.join(', ');
+      trigger.parentElement.classList.remove('ms-placeholder');
+    }
+  };
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.ms-dd')) {
+      document.querySelectorAll('.ms-dd-panel.open').forEach(p => p.classList.remove('open'));
+    }
+  });
+
   async function populateNewTaskDropdowns() {
     try {
       const snap = await getDocs(collection(db, 'users'));
       const users = snap.docs.map(d => d.data()).filter(u => u.name);
-      document.getElementById('nt-owners').innerHTML = users.map(u =>
-        '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap"><input type="checkbox" value="' + esc(u.name) + '" style="width:14px;height:14px;cursor:pointer;margin:0"> ' + esc(u.name) + '</label>'
+      document.querySelector('#nt-owners .ms-dd-panel').innerHTML = users.map(u =>
+        '<label class="ms-dd-item"><input type="checkbox" value="' + esc(u.name) + '" onchange="updateMsDropdownLabel(\'nt-owners\')"> ' + esc(u.name) + '</label>'
       ).join('');
     } catch (e) { /* picker just stays empty */ }
 
@@ -1216,6 +1260,7 @@
       });
       textEl.value = '';
       document.querySelectorAll('#nt-owners input:checked').forEach(c => c.checked = false);
+      updateMsDropdownLabel('nt-owners');
       document.getElementById('nt-due').value = '';
       document.getElementById('nt-project').value = '';
       document.getElementById('add-task-form').style.display = 'none';
