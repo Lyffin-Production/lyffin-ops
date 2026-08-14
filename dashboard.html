@@ -1577,7 +1577,7 @@
 
     Promise.all(ongoing.map(function(p) {
       return getDocs(collection(db, 'projects', p.id, 'items'))
-        .then(function(snap) { return { project: p, items: snap.docs.map(function(d) { return d.data(); }) }; })
+        .then(function(snap) { return { project: p, items: snap.docs.map(function(d) { return d.data(); }).filter(function(i) { return !i.removed; }) }; })
         .catch(function() { return { project: p, items: [] }; });
     })).then(function(results) {
       el.innerHTML = results.map(function(r) {
