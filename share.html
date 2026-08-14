@@ -50,6 +50,20 @@ body{font-family:var(--font-sans);background:var(--surface);color:var(--ink);min
 .item-row-meta{font-size:12px;color:var(--ink-3);margin-top:2px}
 .item-row .stage-pills{margin-top:9px}
 .item-row .stage-pill{font-size:11px;padding:4px 10px}
+.items-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px}
+@media(max-width:420px){.items-grid{grid-template-columns:1fr}}
+.item-card{background:var(--white);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.item-photo{aspect-ratio:4/3;background:var(--surface-2)}
+.item-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.item-photo-empty{display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#f0e6d2,#e3d3ae)}
+.item-photo-empty svg{width:34%;height:34%;opacity:.55}
+.item-card-body{padding:11px 13px 13px}
+.item-card-name{font-size:13.5px;font-weight:600}
+.item-card-meta{font-size:11.5px;color:var(--ink-3);margin-top:2px}
+.item-card .status-badge{margin-top:8px;font-size:10.5px;padding:3px 10px}
+.item-card-hold{font-size:11px;color:#92400e;margin-top:5px}
+.item-card .stage-pills{margin-top:9px;gap:5px}
+.item-card .stage-pill{font-size:10px;padding:3px 8px}
 .progress-section{padding:20px 24px}
 .progress-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .progress-label span:first-child{font-size:13px;font-weight:500}
@@ -252,28 +266,32 @@ function renderProject(project, items) {
   }).join('');
 
   const itemsListHtml = items.length ?
+    '<div class="items-grid">' +
     items.slice()
       .sort((a,b) => { const na=parseInt(a.productNo)||0, nb=parseInt(b.productNo)||0; return na!==nb ? na-nb : (a.name||'').localeCompare(b.name||''); })
       .map(item => {
         const label = (item.overallStatus || 'Structure').replace(' (In Progress)',' · In progress');
         const badgeHtml = item.onHold
-          ? '<span class="status-badge" style="font-size:11px;padding:4px 12px;background:#fef3c7;color:#92400e">On hold</span>'
-          : '<span class="status-badge ' + itemBadgeClass(item.overallStatus) + '" style="font-size:11px;padding:4px 12px">' + esc(label) + '</span>';
+          ? '<span class="status-badge" style="background:#fef3c7;color:#92400e">On hold</span>'
+          : '<span class="status-badge ' + itemBadgeClass(item.overallStatus) + '">' + esc(label) + '</span>';
         const holdNote = (item.onHold && item.holdReason)
-          ? '<div class="item-row-meta" style="color:#92400e">' + esc(item.holdReason) + '</div>' : '';
-        return '<div class="item-row">' +
-          '<div class="item-row-head">' +
-            '<div class="item-row-name" style="display:flex;align-items:center;gap:10px">' +
-              (item.thumbnail ? '<img src="' + item.thumbnail + '" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0" alt="">' : '') +
-              '<span>' + (item.productNo ? '<span class="item-no">#' + esc(item.productNo) + '</span> ' : '') + esc(item.name||'Item') + '</span>' +
-            '</div>' +
+          ? '<div class="item-card-hold">' + esc(item.holdReason) + '</div>' : '';
+        const photoHtml = item.thumbnail
+          ? '<div class="item-photo"><img src="' + item.thumbnail + '" alt=""></div>'
+          : '<div class="item-photo item-photo-empty"><svg viewBox="0 0 100 100" fill="none" stroke="#6b5636" stroke-width="2.4"><rect x="16" y="24" width="68" height="52" rx="3"/><path d="M16 60l18-16 16 14 14-12 20 18"/><circle cx="34" cy="40" r="5"/></svg></div>';
+        return '<div class="item-card">' +
+          photoHtml +
+          '<div class="item-card-body">' +
+            '<div class="item-card-name">' + (item.productNo ? '<span class="item-no">#' + esc(item.productNo) + '</span> ' : '') + esc(item.name||'Item') + '</div>' +
+            '<div class="item-card-meta">Qty: ' + (item.qty||1) + (item.area ? ' · ' + esc(item.area) : '') + '</div>' +
+            (item.dimensions ? '<div class="item-card-meta">' + esc(item.dimensions) + '</div>' : '') +
+            holdNote +
             badgeHtml +
+            '<div class="stage-pills">' + itemStagePills(item) + '</div>' +
           '</div>' +
-          '<div class="item-row-meta">Qty: ' + (item.qty||1) + (item.area ? ' · ' + esc(item.area) : '') + (item.dimensions ? ' · ' + esc(item.dimensions) : '') + '</div>' +
-          holdNote +
-          '<div class="stage-pills">' + itemStagePills(item) + '</div>' +
         '</div>';
-      }).join('')
+      }).join('') +
+    '</div>'
     : '<div style="padding:18px 24px;color:var(--ink-3);font-size:13px">No items added yet.</div>';
 
   document.getElementById('main').innerHTML =
