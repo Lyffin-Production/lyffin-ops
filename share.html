@@ -17,12 +17,13 @@
 :root{--ink:#1a1a18;--ink-2:#4a4a46;--ink-3:#9a9890;--surface:#f7f6f2;--surface-2:#eeecea;--border:#dddbd5;--gold:#b89a6a;--gold-lt:rgba(184,154,106,0.12);--white:#ffffff;--radius:6px;--font-sans:'Inter',system-ui,sans-serif;--font-disp:'Playfair Display',Georgia,serif}
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Playfair+Display:wght@500;600&display=swap');
 body{font-family:var(--font-sans);background:var(--surface);color:var(--ink);min-height:100vh}
-.header{background:var(--ink);padding:20px 24px;display:flex;align-items:center;justify-content:space-between}
+.header{background:var(--ink);padding:22px 24px 34px;display:flex;align-items:center;justify-content:space-between}
 .logo-name{font-family:var(--font-disp);font-size:20px;font-weight:600;color:var(--white)}
 .logo-sub{font-size:10px;color:var(--gold);letter-spacing:.1em;text-transform:uppercase;margin-top:1px}
 .header-right{font-size:12px;color:rgba(255,255,255,0.4);text-align:right}
-.content{max-width:600px;margin:0 auto;padding:32px 20px 48px}
+.content{max-width:600px;margin:0 auto;padding:20px 20px 48px}
 .card{background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px}
+.hero-card{margin-top:-22px;box-shadow:0 10px 30px rgba(0,0,0,.1);border-color:transparent}
 .card-header{padding:20px 24px;border-bottom:1px solid var(--surface-2)}
 .project-title{font-family:var(--font-disp);font-size:22px;font-weight:500;margin-bottom:4px}
 .project-sub{font-size:13px;color:var(--ink-3)}
@@ -276,7 +277,7 @@ function renderProject(project, items) {
     : '<div style="padding:18px 24px;color:var(--ink-3);font-size:13px">No items added yet.</div>';
 
   document.getElementById('main').innerHTML =
-    '<div class="card">' +
+    '<div class="card hero-card">' +
       '<div class="card-header">' +
         '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">' +
           '<div>' +
@@ -299,16 +300,7 @@ function renderProject(project, items) {
     '<div class="card">' +
       '<div class="progress-section">' +
         '<div class="progress-label"><span>Production progress</span><span>' + pct + '%</span></div>' +
-        '<div class="progress-bar-bg"><div class="progress-bar-fill" style="width:' + pct + '%"></div></div>' +
-        (stageSummary.length > 0 ?
-          '<div class="stage-pills">' +
-            stageSummary.map(s =>
-              '<span class="stage-pill ' + (s.pct === 100 ? 'sp-done' : s.inProgress ? 'sp-inprogress' : 'sp-pending') + '">' +
-                s.label + (s.inProgress && s.pct === 0 ? ' Started' : ' ' + s.pct + '%') +
-              '</span>'
-            ).join('') +
-          '</div>'
-        : '') +
+        buildPipelineHtml(stageSummary) +
       '</div>' +
     '</div>' +
 
@@ -323,6 +315,37 @@ function renderProject(project, items) {
         timelineHtml +
       '</div>' +
     '</div>';
+}
+
+// Turns the per-stage completion summary into connected segments — a stage
+// counts as done once every item that needs it has finished it, "current"
+// is the first stage still in progress, and a stage nothing here actually
+// needs is already excluded from stageSummary upstream. Ends with a plain
+// -language line instead of asking a client to interpret stage names or a
+// bare percentage on their own.
+function buildPipelineHtml(stageSummary) {
+  if (!stageSummary.length) return '';
+  let currentIdx = stageSummary.findIndex(s => s.pct < 100);
+  if (currentIdx === -1) currentIdx = stageSummary.length;
+  const segs = stageSummary.map((s, i) => Object.assign({}, s, {
+    state: i < currentIdx ? 'done' : (i === currentIdx ? 'current' : 'upcoming')
+  }));
+  const track = '<div style="display:flex;gap:5px;margin-top:2px">' + segs.map(s => {
+    const fillPct = s.state === 'done' ? 100 : (s.state === 'current' ? Math.max(8, s.pct) : 0);
+    return '<div style="flex:1">' +
+      '<div style="height:7px;background:var(--surface-2);border-radius:4px;overflow:hidden">' +
+        '<div style="height:100%;border-radius:4px;width:' + fillPct + '%;background:var(--gold);transition:width .5s ease"></div>' +
+      '</div>' +
+      '<div style="font-size:10.5px;margin-top:6px;' + (s.state==='done'?'color:var(--ink-2);font-weight:500':s.state==='current'?'color:var(--ink);font-weight:600':'color:var(--ink-3)') + '">' + esc(s.label) + '</div>' +
+    '</div>';
+  }).join('') + '</div>';
+  const doneCount = segs.filter(s => s.state === 'done').length;
+  const note = currentIdx >= segs.length
+    ? 'Every stage is complete.'
+    : (doneCount > 0
+        ? esc(segs[currentIdx].label) + ' is the current stage — ' + doneCount + ' of ' + segs.length + ' stages are already done.'
+        : 'Production is starting with ' + esc(segs[0].label) + '.');
+  return track + '<div style="font-size:12px;color:var(--ink-3);margin-top:12px;padding-top:12px;border-top:1px solid var(--surface-2)">' + note + '</div>';
 }
 
 function formatDate(d) {

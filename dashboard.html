@@ -22,11 +22,18 @@
     --border:    #dddbd5;
     --gold:      #b89a6a;
     --gold-lt:   rgba(184,154,106,0.12);
+    --gold-dk:   #96754e;
     --white:     #ffffff;
     --radius:    6px;
     --sidebar-w: 220px;
     --font-sans: 'Inter', system-ui, sans-serif;
     --font-disp: 'Playfair Display', Georgia, serif;
+
+    /* Formalized status tokens — matches the same set added to project.html
+       so overdue/success/warning colors stay in sync across the app. */
+    --danger:     #c0392b; --danger-bg: #fdeeec; --danger-dk: #8f2a1e;
+    --success:    #1c8a4e; --success-bg: #e9f8ef;
+    --warn-ink:   #92400e; --warn-bg:   #fef3c7;
 
     /* status colors */
     --s-not-started: #e8e6e0;
@@ -859,12 +866,12 @@
           <span style="font-size:10px;color:var(--gold)">View all →</span>
         </div>
       </div>
-      <div class="stat-card" id="card-overdue" style="cursor:pointer;border-color:#f5c6c6" title="Click to view overdue projects">
-        <div class="stat-label" style="color:#c0392b">Overdue</div>
-        <div class="stat-value" id="stat-overdue" style="color:#c0392b">—</div>
-        <div class="stat-sub" style="display:flex;align-items:center;justify-content:space-between">
+      <div class="stat-card" id="card-overdue" style="cursor:pointer;background:var(--danger,#c0392b);border-color:var(--danger,#c0392b);position:relative;overflow:hidden" title="Click to view overdue projects">
+        <div class="stat-label" style="color:rgba(255,255,255,.75)">Overdue</div>
+        <div class="stat-value" id="stat-overdue" style="color:#fff">—</div>
+        <div class="stat-sub" style="display:flex;align-items:center;justify-content:space-between;color:rgba(255,255,255,.7)">
           <span>past handover date</span>
-          <span style="font-size:10px;color:#c0392b">View →</span>
+          <span style="font-size:10px;color:#fff">View →</span>
         </div>
       </div>
     </div>
@@ -1594,7 +1601,25 @@
           '</span>';
         }).join('');
 
-        return '<div style="padding:14px 20px;border-bottom:1px solid var(--surface-2)">' +
+        // Compact pipeline: same real per-stage data already computed
+        // above, shown as connected segments instead of one flat bar — a
+        // stage is "done" once everything that needs it has finished it,
+        // "current" is the first one still in progress, and a stage
+        // nothing here actually needs (na) is left out entirely.
+        const pipeSegs = breakdown.filter(function(b) { return !b.na; });
+        var currentIdx = -1;
+        for (var pi = 0; pi < pipeSegs.length; pi++) { if (pipeSegs[pi].pct < 100) { currentIdx = pi; break; } }
+        if (currentIdx === -1) currentIdx = pipeSegs.length;
+        const miniPipe = !pipeSegs.length ? '' :
+          '<div style="display:flex;gap:3px;margin-bottom:8px">' + pipeSegs.map(function(b, i) {
+            const sc = STAGE_COLORS[b.stage];
+            const state = i < currentIdx ? 'done' : (i === currentIdx ? 'current' : 'upcoming');
+            const fillPct = state === 'done' ? 100 : (state === 'current' ? Math.max(8, b.pct) : 0);
+            return '<div style="flex:1"><div style="height:5px;background:var(--surface-2);border-radius:3px;overflow:hidden">' +
+              '<div style="height:100%;border-radius:3px;width:' + fillPct + '%;background:' + sc + '"></div></div></div>';
+          }).join('') + '</div>';
+
+        return '<div style="padding:14px 20px;border-bottom:1px solid var(--surface-2)' + (daysLeft !== null && daysLeft < 0 ? ';background:var(--danger-bg,#fdeeec)' : '') + '">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;row-gap:6px;margin-bottom:8px">' +
             '<div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 160px">' +
               '<span style="font-size:13px;font-weight:500">' + esc(p.projectName||'—') + '</span>' +
@@ -1606,9 +1631,7 @@
               (daysLeft !== null ? '<span style="font-size:11px;white-space:nowrap;' + urgency + '">' + (daysLeft < 0 ? Math.abs(daysLeft) + 'd overdue' : daysLeft === 0 ? 'Due today' : daysLeft + 'd left') + ' · ' + formatDate(p.handoverDate) + '</span>' : '') +
             '</div>' +
           '</div>' +
-          '<div style="height:12px;background:var(--surface-2);border-radius:6px;overflow:hidden;margin-bottom:8px">' +
-            '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,' + barColor + ',' + barColor + 'cc);border-radius:6px;transition:width .6s ease"></div>' +
-          '</div>' +
+          miniPipe +
           (items.length > 0 ?
             '<div style="display:flex;gap:6px;flex-wrap:wrap">' + pills + '</div>'
           : '<div style="font-size:10px;color:var(--ink-3)">No items pushed yet</div>') +
