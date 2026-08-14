@@ -1606,15 +1606,21 @@
         // stage is "done" once everything that needs it has finished it,
         // "current" is the first one still in progress, and a stage
         // nothing here actually needs (na) is left out entirely.
-        const pipeSegs = breakdown.filter(function(b) { return !b.na; });
+        // b.pct above is the stage's WEIGHTED contribution to the overall
+        // blended percentage (maxing out at its weight, 30 or 10) — not a
+        // real 0-100 figure for the stage itself, so it's recomputed here
+        // from the raw done/total counts instead.
+        const pipeSegs = breakdown.filter(function(b) { return !b.na; }).map(function(b) {
+          return Object.assign({}, b, { realPct: b.total > 0 ? Math.round(b.done / b.total * 100) : 0 });
+        });
         var currentIdx = -1;
-        for (var pi = 0; pi < pipeSegs.length; pi++) { if (pipeSegs[pi].pct < 100) { currentIdx = pi; break; } }
+        for (var pi = 0; pi < pipeSegs.length; pi++) { if (pipeSegs[pi].realPct < 100) { currentIdx = pi; break; } }
         if (currentIdx === -1) currentIdx = pipeSegs.length;
         const miniPipe = !pipeSegs.length ? '' :
           '<div style="display:flex;gap:3px;margin-bottom:8px">' + pipeSegs.map(function(b, i) {
             const sc = STAGE_COLORS[b.stage];
             const state = i < currentIdx ? 'done' : (i === currentIdx ? 'current' : 'upcoming');
-            const fillPct = state === 'done' ? 100 : (state === 'current' ? Math.max(8, b.pct) : 0);
+            const fillPct = state === 'done' ? 100 : (state === 'current' ? Math.max(8, b.realPct) : 0);
             return '<div style="flex:1"><div style="height:5px;background:var(--surface-2);border-radius:3px;overflow:hidden">' +
               '<div style="height:100%;border-radius:3px;width:' + fillPct + '%;background:' + sc + '"></div></div></div>';
           }).join('') + '</div>';
