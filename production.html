@@ -43,6 +43,36 @@ body{font-family:var(--font-sans);background:var(--surface);color:var(--ink);min
 .btn-ghost{background:transparent;color:var(--ink-2);border:1px solid var(--border)}
 .btn-ghost:hover{background:var(--surface-2)}
 .btn svg{width:14px;height:14px}
+
+/* Tab switcher (In Production / Stock) — this file didn't have one before */
+.tabs{display:flex;gap:2px}
+.tab{padding:10px 18px;font-size:13.5px;font-weight:500;color:var(--ink-3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s}
+.tab.active{color:var(--ink);border-bottom-color:var(--gold)}
+
+/* Stock filter bar */
+.filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.search-box{position:relative;flex:1;min-width:160px;max-width:280px}
+.search-box svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--ink-3)}
+.search-box input{width:100%;padding:9px 12px 9px 34px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:var(--font-sans);background:var(--white)}
+.filter-select{padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:var(--font-sans);background:var(--white);color:var(--ink)}
+
+/* Stock item cards — photo-forward, matching the rest of the app's newer cards */
+.stock-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+@media(max-width:600px){.stock-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:420px){.stock-grid{grid-template-columns:1fr}}
+.stock-card{background:var(--white);border:1px solid var(--border);border-radius:12px;overflow:hidden;cursor:pointer;transition:box-shadow .15s}
+.stock-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.08)}
+.stock-photo{aspect-ratio:4/3;background:var(--surface-2);display:flex;align-items:center;justify-content:center;position:relative}
+.stock-photo img{width:100%;height:100%;object-fit:cover}
+.stock-photo-placeholder{font-size:11px;color:var(--ink-3)}
+.stock-qty-badge{position:absolute;top:8px;right:8px;background:rgba(26,26,24,.75);color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px}
+.stock-body{padding:11px 13px 13px}
+.stock-name{font-size:13.5px;font-weight:600}
+.stock-meta{font-size:11.5px;color:var(--ink-3);margin-top:2px}
+.stock-status-pill{display:inline-block;font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:20px;margin-top:7px}
+.stock-status-instock{background:#e9f8ef;color:#1c8a4e}
+.stock-status-reserved{background:#fef3c7;color:#92400e}
+.stock-status-sold{background:var(--surface-2);color:var(--ink-3)}
 .content{padding:28px 32px;flex:1}
 .projects-grid{display:flex;flex-direction:column;gap:20px}
 .project-card{background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden}
@@ -231,8 +261,105 @@ tr.item-held{background:#fffbeb}
     </div>
   </div>
   <div class="content">
-    <div class="projects-grid" id="projects-grid">
-      <div class="empty-state">Loading...</div>
+    <div class="tabs" id="prod-tabs" style="border-bottom:1px solid var(--border);margin-bottom:14px">
+      <div class="tab active" onclick="switchProdTab('production', this)">In Production</div>
+      <div class="tab" onclick="switchProdTab('stock', this)">Stock</div>
+    </div>
+
+    <div id="tab-production">
+      <div class="projects-grid" id="projects-grid">
+        <div class="empty-state">Loading...</div>
+      </div>
+    </div>
+
+    <div id="tab-stock" style="display:none">
+      <div class="filters" style="margin-bottom:14px">
+        <div class="search-box">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="6.5" cy="6.5" r="4.5"/><line x1="10" y1="10" x2="14" y2="14"/></svg>
+          <input type="text" id="stock-search" placeholder="Search stock…" oninput="renderStock()">
+        </div>
+        <select class="filter-select" id="stock-status-filter" onchange="renderStock()">
+          <option value="">All statuses</option>
+          <option value="In Stock">In Stock</option>
+          <option value="Reserved">Reserved</option>
+          <option value="Sold">Sold</option>
+        </select>
+        <button class="btn btn-primary" onclick="openAddStockModal()" style="margin-left:auto">+ Add stock item</button>
+      </div>
+      <div class="stock-grid" id="stock-grid">
+        <div class="empty-state">Loading...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add/edit stock item modal -->
+<div class="modal-backdrop" id="modal-stock">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="stock-modal-title">Add stock item</div>
+      <button class="modal-close" onclick="closeStockModal()">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="2" y1="2" x2="16" y2="16"/><line x1="16" y1="2" x2="2" y2="16"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="stock-id">
+
+      <div class="form-field">
+        <label>Photo</label>
+        <div id="stock-photo-preview" style="width:100%;aspect-ratio:4/3;background:var(--surface-2);border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="document.getElementById('stock-photo-input').click()">
+          <span style="font-size:12px;color:var(--ink-3)">Tap to add a photo</span>
+        </div>
+        <input type="file" id="stock-photo-input" accept="image/*" style="display:none" onchange="handleStockPhotoSelect(this)">
+      </div>
+
+      <div class="form-field">
+        <label>Item name</label>
+        <input type="text" id="stock-name" placeholder="e.g. 3-Seater Sofa">
+      </div>
+
+      <div class="form-field">
+        <label>Category</label>
+        <select id="stock-category">
+          <option value="">Select…</option>
+          <option>Sofa</option>
+          <option>Chair</option>
+          <option>Table</option>
+          <option>Wardrobe</option>
+          <option>Bed</option>
+          <option>Storage</option>
+          <option>Other</option>
+        </select>
+      </div>
+
+      <div class="form-field">
+        <label>Quantity</label>
+        <input type="number" id="stock-qty" min="1" value="1">
+      </div>
+
+      <div class="form-field">
+        <label>Dimensions (optional)</label>
+        <input type="text" id="stock-dims" placeholder="e.g. 210cm x 90cm x 80cm">
+      </div>
+
+      <div class="form-field">
+        <label>Notes (optional)</label>
+        <textarea id="stock-notes" placeholder="Fabric, finish, condition…" style="min-height:60px"></textarea>
+      </div>
+
+      <div class="form-field">
+        <label>Status</label>
+        <select id="stock-status">
+          <option>In Stock</option>
+          <option>Reserved</option>
+          <option>Sold</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="btn-delete-stock" onclick="deleteStockItem()" style="display:none;color:#c0392b;margin-right:auto">Delete</button>
+      <button class="btn btn-ghost" onclick="closeStockModal()">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-stock" onclick="saveStockItem()">Save</button>
     </div>
   </div>
 </div>
@@ -306,6 +433,7 @@ onAuthStateChanged(auth, async function(user) {
     document.getElementById('bulk-controls').style.display = 'flex';
   }
   loadProduction(currentRole, name, user.uid);
+  loadStock();
 });
 
 function loadProduction(role, userName, uid) {
@@ -849,6 +977,183 @@ window.saveRemark = async function() {
     closeRemarkModal();
     showToast('Remark saved');
   } catch(e) { showToast('Error: ' + e.message); }
+};
+
+// ── STOCK (factory inventory, not tied to any project) ─────────────────────
+window.switchProdTab = function(tab, el) {
+  document.querySelectorAll('#prod-tabs .tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-production').style.display = tab === 'production' ? 'block' : 'none';
+  document.getElementById('tab-stock').style.display = tab === 'stock' ? 'block' : 'none';
+};
+
+let allStock = [];
+let _stockPhotoData = null; // the compressed photo for whichever item is currently open in the modal
+
+function loadStock() {
+  onSnapshot(query(collection(db, 'stockItems')), function(snap) {
+    allStock = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+    renderStock();
+  }, function(e) {
+    console.error('loadStock failed:', e);
+  });
+}
+
+window.renderStock = function() {
+  const grid = document.getElementById('stock-grid');
+  if (!grid) return;
+  const q = (document.getElementById('stock-search')?.value || '').toLowerCase();
+  const statusFilter = document.getElementById('stock-status-filter')?.value || '';
+  const filtered = allStock.filter(function(s) {
+    if (statusFilter && s.status !== statusFilter) return false;
+    if (q && !(s.name || '').toLowerCase().includes(q) && !(s.category || '').toLowerCase().includes(q)) return false;
+    return true;
+  }).sort(function(a, b) { return (b.addedAt?.seconds || 0) - (a.addedAt?.seconds || 0); });
+
+  if (!filtered.length) {
+    grid.innerHTML = '<div class="empty-state">' + (allStock.length ? 'Nothing matches that search.' : 'No stock items added yet — tap "+ Add stock item" to log the first one.') + '</div>';
+    return;
+  }
+  grid.innerHTML = filtered.map(function(s) {
+    const statusClass = s.status === 'Reserved' ? 'stock-status-reserved' : s.status === 'Sold' ? 'stock-status-sold' : 'stock-status-instock';
+    return '<div class="stock-card" onclick="openEditStockModal(\'' + s.id + '\')">' +
+      '<div class="stock-photo">' +
+        (s.photo ? '<img src="' + s.photo + '" alt="">' : '<span class="stock-photo-placeholder">No photo</span>') +
+        (s.qty > 1 ? '<span class="stock-qty-badge">×' + s.qty + '</span>' : '') +
+      '</div>' +
+      '<div class="stock-body">' +
+        '<div class="stock-name">' + esc(s.name || 'Unnamed item') + '</div>' +
+        '<div class="stock-meta">' + esc(s.category || '—') + (s.dimensions ? ' · ' + esc(s.dimensions) : '') + '</div>' +
+        '<span class="stock-status-pill ' + statusClass + '">' + esc(s.status || 'In Stock') + '</span>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+};
+
+// Compresses an uploaded photo the same way the Factory Listing Tool does —
+// a full-resolution photo would be needless weight for what's meant to be
+// a quick catalog view, and this keeps every stock item comfortably inside
+// Firestore's per-document size limit.
+function compressStockPhoto(dataURL) {
+  return new Promise(function(resolve, reject) {
+    const img = new Image();
+    img.onload = function() {
+      let w = img.width, h = img.height;
+      const maxDim = 560;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+        else { w = Math.round(w * maxDim / h); h = maxDim; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.78));
+    };
+    img.onerror = function() { reject(new Error('Could not process that image')); };
+    img.src = dataURL;
+  });
+}
+
+window.handleStockPhotoSelect = function(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async function() {
+    try {
+      const compressed = await compressStockPhoto(reader.result);
+      _stockPhotoData = compressed;
+      document.getElementById('stock-photo-preview').innerHTML = '<img src="' + compressed + '" style="width:100%;height:100%;object-fit:cover">';
+    } catch (e) {
+      showToast('Could not process that photo');
+    }
+  };
+  reader.onerror = function() { showToast('Could not read that file'); };
+  reader.readAsDataURL(file);
+};
+
+window.openAddStockModal = function() {
+  document.getElementById('stock-modal-title').textContent = 'Add stock item';
+  document.getElementById('stock-id').value = '';
+  document.getElementById('stock-name').value = '';
+  document.getElementById('stock-category').value = '';
+  document.getElementById('stock-qty').value = '1';
+  document.getElementById('stock-dims').value = '';
+  document.getElementById('stock-notes').value = '';
+  document.getElementById('stock-status').value = 'In Stock';
+  document.getElementById('stock-photo-preview').innerHTML = '<span style="font-size:12px;color:var(--ink-3)">Tap to add a photo</span>';
+  _stockPhotoData = null;
+  document.getElementById('btn-delete-stock').style.display = 'none';
+  document.getElementById('modal-stock').classList.add('open');
+};
+
+window.openEditStockModal = function(id) {
+  const item = allStock.find(function(s) { return s.id === id; });
+  if (!item) return;
+  document.getElementById('stock-modal-title').textContent = 'Edit stock item';
+  document.getElementById('stock-id').value = item.id;
+  document.getElementById('stock-name').value = item.name || '';
+  document.getElementById('stock-category').value = item.category || '';
+  document.getElementById('stock-qty').value = item.qty || 1;
+  document.getElementById('stock-dims').value = item.dimensions || '';
+  document.getElementById('stock-notes').value = item.notes || '';
+  document.getElementById('stock-status').value = item.status || 'In Stock';
+  document.getElementById('stock-photo-preview').innerHTML = item.photo
+    ? '<img src="' + item.photo + '" style="width:100%;height:100%;object-fit:cover">'
+    : '<span style="font-size:12px;color:var(--ink-3)">Tap to add a photo</span>';
+  _stockPhotoData = item.photo || null; // unchanged unless a new photo is picked
+  document.getElementById('btn-delete-stock').style.display = 'inline-flex';
+  document.getElementById('modal-stock').classList.add('open');
+};
+
+window.closeStockModal = function() {
+  document.getElementById('modal-stock').classList.remove('open');
+};
+
+window.saveStockItem = async function() {
+  const id = document.getElementById('stock-id').value;
+  const name = document.getElementById('stock-name').value.trim();
+  if (!name) { showToast('Enter an item name'); return; }
+  const btn = document.getElementById('btn-save-stock');
+  btn.disabled = true;
+  try {
+    const data = {
+      name,
+      category: document.getElementById('stock-category').value,
+      qty: Math.max(1, parseInt(document.getElementById('stock-qty').value) || 1),
+      dimensions: document.getElementById('stock-dims').value.trim(),
+      notes: document.getElementById('stock-notes').value.trim(),
+      status: document.getElementById('stock-status').value,
+      photo: _stockPhotoData || null,
+      updatedAt: serverTimestamp()
+    };
+    if (id) {
+      await updateDoc(doc(db, 'stockItems', id), data);
+      showToast('Stock item updated');
+    } else {
+      data.addedBy = currentUserName;
+      data.addedAt = serverTimestamp();
+      await addDoc(collection(db, 'stockItems'), data);
+      showToast('Stock item added');
+    }
+    closeStockModal();
+  } catch (e) {
+    showToast('Save failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+window.deleteStockItem = async function() {
+  const id = document.getElementById('stock-id').value;
+  if (!id) return;
+  if (!confirm('Delete this stock item? This cannot be undone.')) return;
+  try {
+    await deleteDoc(doc(db, 'stockItems', id));
+    closeStockModal();
+    showToast('Stock item deleted');
+  } catch (e) {
+    showToast('Delete failed: ' + e.message);
+  }
 };
 
 // ── BULK STATUS UPDATE ────────────────────────────────────────────────────

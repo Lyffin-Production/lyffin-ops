@@ -133,6 +133,14 @@ service cloud.firestore {
       allow write: if isStaff();
     }
 
+    // ── Factory stock (items kept in inventory, not tied to a project) ────
+    // Same broad staff access as tasks — any staff member can add or
+    // update a stock item, including its photo.
+    match /stockItems/{id} {
+      allow read: if isStaff();
+      allow write: if isStaff();
+    }
+
     // ── Client communication log ─────────────────────────────────────────
     // A record of calls/messages with a client per project — who spoke to
     // them, when, what was said — kept internal (never shown on the
