@@ -372,6 +372,11 @@
 
     <!-- Complaints tab -->
     <div id="tab-complaints">
+      <div class="tabs" style="border-bottom:1px solid var(--border);margin-bottom:14px">
+        <div class="tab active" onclick="setComplaintStatusTab('ongoing', this)">Ongoing</div>
+        <div class="tab" onclick="setComplaintStatusTab('resolved', this)">Resolved</div>
+        <div class="tab" onclick="setComplaintStatusTab('all', this)">All</div>
+      </div>
       <div class="filters">
         <div class="search-box">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="6.5" cy="6.5" r="4.5"/><line x1="10" y1="10" x2="14" y2="14"/></svg>
@@ -407,6 +412,11 @@
 
     <!-- QC Defects tab -->
     <div id="tab-qc" style="display:none">
+      <div class="tabs" style="border-bottom:1px solid var(--border);margin-bottom:14px">
+        <div class="tab active" onclick="setQCStatusTab('ongoing', this)">Ongoing</div>
+        <div class="tab" onclick="setQCStatusTab('resolved', this)">Resolved</div>
+        <div class="tab" onclick="setQCStatusTab('all', this)">All</div>
+      </div>
       <div class="filters">
         <div class="search-box">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="6.5" cy="6.5" r="4.5"/><line x1="10" y1="10" x2="14" y2="14"/></svg>
@@ -745,14 +755,14 @@
       }
       allComplaints = complaints;
       updateStats();
-      renderComplaints(allComplaints);
+      applyComplaintFilters();
     });
 
     // Load QC defects real-time
     onSnapshot(query(collection(db, 'qc_reports'), orderBy('createdAt', 'desc')), (snap) => {
       allQC = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       updateStats();
-      renderQC(allQC);
+      applyQCFilters();
       document.getElementById('page-loading').style.display = 'none';
     });
   }
@@ -775,7 +785,9 @@
   function renderComplaints(data) {
     const tbody = document.getElementById('complaints-tbody');
     if (!data.length) {
-      tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">No complaints logged yet.</div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">' +
+        (complaintStatusTab === 'resolved' ? 'Nothing resolved yet.' : complaintStatusTab === 'ongoing' ? 'Nothing open right now.' : 'No complaints logged yet.') +
+        '</div></td></tr>';
       return;
     }
     tbody.innerHTML = data.map(c => {
@@ -797,7 +809,9 @@
   function renderQC(data) {
     const tbody = document.getElementById('qc-tbody');
     if (!data.length) {
-      tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">No QC defects logged yet.</div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">' +
+        (qcStatusTab === 'resolved' ? 'Nothing resolved yet.' : qcStatusTab === 'ongoing' ? 'Nothing open right now.' : 'No QC defects logged yet.') +
+        '</div></td></tr>';
       return;
     }
     tbody.innerHTML = data.map(q => {
@@ -827,35 +841,66 @@
   };
 
   // ── FILTERS ───────────────────────────────────────────────────────────────
-  window.filterComplaints = function(q) {
-    const filtered = allComplaints.filter(c =>
-      (c.productName||'').toLowerCase().includes(q.toLowerCase()) ||
-      (projects.find(p=>p.id===c.projectId)?.projectName||'').toLowerCase().includes(q.toLowerCase())
-    );
+  // ── FILTERS ───────────────────────────────────────────────────────────────
+  // Each of these applies EVERY active filter together — the status tab,
+  // the search box, and (for QC) stage/category — rather than only the one
+  // that just changed, so switching tabs doesn't quietly forget a search
+  // that's already been typed in.
+  let complaintStatusTab = 'ongoing';
+  let qcStatusTab = 'ongoing';
+
+  function applyComplaintFilters() {
+    const q = (document.querySelector('#tab-complaints .search-box input')?.value || '').toLowerCase();
+    const statusVal = document.querySelector('#tab-complaints .filter-select')?.value || '';
+    const filtered = allComplaints.filter(c => {
+      if (complaintStatusTab === 'ongoing' && c.status === 'Resolved') return false;
+      if (complaintStatusTab === 'resolved' && c.status !== 'Resolved') return false;
+      if (statusVal && c.status !== statusVal) return false;
+      if (q) {
+        const projName = (projects.find(p => p.id === c.projectId)?.projectName || '').toLowerCase();
+        if (!(c.productName || '').toLowerCase().includes(q) && !projName.includes(q)) return false;
+      }
+      return true;
+    });
     renderComplaints(filtered);
-  };
+  }
 
-  window.filterComplaintsByStatus = function(status) {
-    renderComplaints(status ? allComplaints.filter(c => c.status === status) : allComplaints);
+  window.setComplaintStatusTab = function(tab, el) {
+    complaintStatusTab = tab;
+    document.querySelectorAll('#tab-complaints .tabs .tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    applyComplaintFilters();
   };
+  window.filterComplaints = function() { applyComplaintFilters(); };
+  window.filterComplaintsByStatus = function() { applyComplaintFilters(); };
 
-  window.filterQC = function(q) {
-    const filtered = allQC.filter(r =>
-      (r.productName||'').toLowerCase().includes(q.toLowerCase()) ||
-      (projects.find(p=>p.id===r.projectId)?.projectName||'').toLowerCase().includes(q.toLowerCase())
-    );
+  function applyQCFilters() {
+    const q = (document.querySelector('#tab-qc .search-box input')?.value || '').toLowerCase();
+    const stage = document.querySelectorAll('#tab-qc .filter-select')[0]?.value || '';
+    const cat = document.getElementById('filter-qc-category')?.value || '';
+    const filtered = allQC.filter(r => {
+      if (qcStatusTab === 'ongoing' && r.status === 'Resolved') return false;
+      if (qcStatusTab === 'resolved' && r.status !== 'Resolved') return false;
+      if (stage && r.stage !== stage) return false;
+      if (cat && r.category !== cat) return false;
+      if (q) {
+        const projName = (projects.find(p => p.id === r.projectId)?.projectName || '').toLowerCase();
+        if (!(r.productName || '').toLowerCase().includes(q) && !projName.includes(q)) return false;
+      }
+      return true;
+    });
     renderQC(filtered);
-  };
+  }
 
-  window.filterQCByStage = function(stage) {
-    const cat = document.getElementById('filter-qc-category').value;
-    renderQC(allQC.filter(r => (!stage || r.stage === stage) && (!cat || r.category === cat)));
+  window.setQCStatusTab = function(tab, el) {
+    qcStatusTab = tab;
+    document.querySelectorAll('#tab-qc .tabs .tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    applyQCFilters();
   };
-
-  window.filterQCByCategory = function(cat) {
-    const stage = document.querySelectorAll('#tab-qc .filter-select')[1]?.value || '';
-    renderQC(allQC.filter(r => (!stage || r.stage === stage) && (!cat || r.category === cat)));
-  };
+  window.filterQC = function() { applyQCFilters(); };
+  window.filterQCByStage = function() { applyQCFilters(); };
+  window.filterQCByCategory = function() { applyQCFilters(); };
 
   // ── NEW COMPLAINT ─────────────────────────────────────────────────────────
   window.openNewComplaint = function() {
