@@ -37,6 +37,9 @@ body{font-family:var(--font-sans);background:var(--surface);color:var(--ink);min
 .topbar-title{font-family:var(--font-disp);font-size:18px;font-weight:500}
 .topbar-actions{display:flex;align-items:center;gap:10px}
 .filter-select{height:36px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:var(--font-sans);color:var(--ink-2);background:var(--white);cursor:pointer;outline:none}
+.bulk-controls{display:none;align-items:center;gap:8px}
+#bulk-project-sel{max-width:200px}
+#prod-search{width:160px}
 .btn{height:36px;padding:0 16px;border-radius:var(--radius);font-size:13px;font-weight:500;font-family:var(--font-sans);cursor:pointer;border:none;transition:all .12s;display:inline-flex;align-items:center;gap:6px}
 .btn-primary{background:var(--ink);color:var(--white)}
 .btn-primary:hover{background:#2e2e2a}
@@ -54,7 +57,6 @@ body{font-family:var(--font-sans);background:var(--surface);color:var(--ink);min
 .search-box{position:relative;flex:1;min-width:160px;max-width:280px}
 .search-box svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--ink-3)}
 .search-box input{width:100%;padding:9px 12px 9px 34px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:var(--font-sans);background:var(--white)}
-.filter-select{padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:var(--font-sans);background:var(--white);color:var(--ink)}
 
 /* Stock item cards — photo-forward, matching the rest of the app's newer cards */
 .stock-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
@@ -169,7 +171,16 @@ tr.item-held{background:#fffbeb}
 .bulk-bar{background:var(--ink);color:var(--white);padding:10px 20px;display:flex;align-items:center;gap:12px;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.1)}
 .bulk-bar select{background:rgba(255,255,255,0.12);color:var(--white);border:1px solid rgba(255,255,255,0.2);border-radius:var(--radius);padding:5px 10px;font-size:12px;font-family:var(--font-sans);outline:none}
 .bulk-bar select option{background:var(--ink);color:var(--white)}
-@media(max-width:700px){.sidebar{display:none}.main{margin-left:0}.content{padding:16px 12px 80px}.topbar{padding:0 16px}}
+@media(max-width:700px){.sidebar{display:none}.main{margin-left:0}.content{padding:16px 12px 80px}.topbar{padding:10px 16px}}
+@media(max-width:700px){
+  .topbar{height:auto;flex-wrap:wrap;row-gap:10px;align-items:flex-start}
+  .topbar-actions{width:100%;flex-wrap:wrap}
+  .bulk-controls{width:100%;flex-wrap:wrap}
+  .bulk-controls select{flex:1;min-width:130px}
+  #bulk-project-sel{max-width:none}
+  #prod-search{width:100%;flex:1 1 100%}
+  #filter-status{flex:1;min-width:130px}
+}
 /* Mobile bottom nav */
 .bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--ink);height:64px;z-index:50;border-top:1px solid rgba(255,255,255,0.08);padding-bottom:env(safe-area-inset-bottom)}
 .bottom-nav-inner{display:flex;height:100%;align-items:stretch;width:100%;justify-content:space-around}
@@ -230,8 +241,8 @@ tr.item-held{background:#fffbeb}
     <div class="topbar-title">Production</div>
     <div class="topbar-actions">
       <!-- Bulk status update — supervisor/admin only, shown after auth -->
-      <div id="bulk-controls" style="display:none;align-items:center;gap:8px">
-        <select class="filter-select" id="bulk-project-sel" style="max-width:200px">
+      <div id="bulk-controls" class="bulk-controls">
+        <select class="filter-select" id="bulk-project-sel">
           <option value="">Select project…</option>
         </select>
         <select class="filter-select" id="bulk-status-sel">
@@ -245,7 +256,7 @@ tr.item-held{background:#fffbeb}
         </select>
         <button class="btn btn-ghost" id="btn-bulk-apply" onclick="bulkUpdateStatus()" style="height:36px">Apply</button>
       </div>
-      <input type="text" id="prod-search" class="filter-select" placeholder="Search project…" oninput="filterProjects()" style="width:160px">
+      <input type="text" id="prod-search" class="filter-select" placeholder="Search project…" oninput="filterProjects()">
       <select class="filter-select" id="filter-status" onchange="filterProjects()">
         <option value="active">Active only</option>
         <option value="">All projects</option>
