@@ -724,6 +724,45 @@ async function syncPublicShare(projectId) {
   } catch (e) { console.error('publicShare sync failed', e); }
 }
 
+// Keeps the project's own status field caught up with real production
+// progress automatically — computed the same way the pipeline visuals
+// elsewhere in the app already do (first stage that isn't fully done
+// across every ACTIVE item), so nobody has to remember to move a status
+// dropdown by hand once the work is genuinely finished. Deliberately
+// one-directional (only ever advances, never regresses) and never touches
+// Delivered/Completed/On Hold — those stay a real human decision.
+async function syncProjectStatus(projectId) {
+  try {
+    const projSnap = await getDoc(doc(db, 'projects', projectId));
+    if (!projSnap.exists()) return;
+    const proj = projSnap.data();
+    const AUTO_STAGES = ['Not Started', 'Structure', 'Polish', 'Upholstery', 'Packing'];
+    const currentIdx = AUTO_STAGES.indexOf(proj.status);
+    if (currentIdx === -1) return; // Delivered/Completed/On Hold/unknown — leave it alone
+
+    const itemsSnap = await getDocs(collection(db, 'projects', projectId, 'items'));
+    const active = itemsSnap.docs.map(d => d.data()).filter(i => !i.removed);
+    if (!active.length) return;
+
+    let computedStatus = 'Packing'; // default once every applicable stage is done
+    for (const s of STAGES.slice(0, 4)) { // carpentry, polish, upholstery, packing — 'ready' isn't a real stage
+      const key = s + 'Status';
+      const applicable = active.filter(i => i[key] !== 'na');
+      if (!applicable.length) continue; // nothing here actually needs this stage
+      if (!applicable.every(i => i[key] === 'done')) { computedStatus = LABELS[s]; break; }
+    }
+
+    const computedIdx = AUTO_STAGES.indexOf(computedStatus);
+    if (computedIdx > currentIdx) {
+      await updateDoc(doc(db, 'projects', projectId), { status: computedStatus });
+      await syncPublicShare(projectId);
+      await logActivity(projectId, 'Status automatically moved to ' + computedStatus + ' — production caught up');
+    }
+  } catch (e) {
+    console.error('syncProjectStatus failed:', e);
+  }
+}
+
 window.tap = async function(projectId, itemId, stage, btn) {
   if (btn.disabled) return;
   btn.disabled = true;
@@ -800,18 +839,10 @@ window.tap = async function(projectId, itemId, stage, btn) {
       showToast(next === 'done' ? (LABELS[stage] + ' complete') : (LABELS[stage] + ' undone'));
     }
 
-    // Check if all items ready → update project status
-    const allSnap = await getDocs(collection(db, 'projects', projectId, 'items'));
-    const allReady = allSnap.docs.every(function(d) {
-      const data = d.data();
-      if (d.id === itemId) return updates.overallStatus === 'Ready';
-      return data.overallStatus === 'Ready';
-    });
-    if (allReady) {
-      await updateDoc(doc(db, 'projects', projectId), {status:'Packing'});
-      await syncPublicShare(projectId);
-      await logActivity(projectId, 'All items ready — project moved to Packing');
-    }
+    // Keep the project's own status caught up with real progress —
+    // correctly excludes removed items and advances through every stage,
+    // not just the final jump to Packing.
+    await syncProjectStatus(projectId);
   } catch(e) {
     console.error(e);
     showToast('Error: ' + e.message);
@@ -864,6 +895,7 @@ window.approveStage = async function(projectId, itemId, stage, btn) {
     await updateDoc(itemRef, updates);
     await syncPublicShare(projectId);
     await logActivity(projectId, currentUserName + ' approved ' + LABELS[stage] + ' for ' + (item.name||'item'));
+    await syncProjectStatus(projectId);
     showToast(LABELS[stage] + ' approved');
   } catch(e) { showToast('Error: ' + e.message); }
   finally { btn.disabled = false; }
@@ -914,6 +946,7 @@ window.markNA = async function(projectId, itemId, stage, btn) {
     await updateDoc(itemRef, updates);
     await syncPublicShare(projectId);
     showToast(stageLabel + ' marked as N/A');
+    await syncProjectStatus(projectId);
   } catch(e) { showToast('Error: ' + e.message); }
   finally { btn.disabled = false; }
 };
