@@ -381,6 +381,42 @@
       </div>
     </div>
 
+    <!-- Business value — connects production activity back to actual
+         business size, not just counts of things happening -->
+    <div class="section-card">
+      <div class="section-header">
+        <div class="section-title">Business value</div>
+        <span style="font-size:11px;color:var(--ink-3)">units, from Capacity</span>
+      </div>
+      <div id="value-summary" style="padding:16px 20px">
+        <div class="empty-small">Loading…</div>
+      </div>
+      <div id="value-trend" style="padding:0 20px 18px"></div>
+    </div>
+
+    <!-- Projects that have gone quiet — an earlier signal than "overdue",
+         which only fires once the deadline is already missed -->
+    <div class="section-card">
+      <div class="section-header">
+        <div class="section-title">Projects needing a check-in</div>
+        <span style="font-size:11px;color:var(--ink-3)" id="stagnant-count"></span>
+      </div>
+      <div id="stagnant-list" style="padding:0">
+        <div class="empty-small">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Recent stage changes — the system now updates a project's status
+         on its own, but that's invisible unless someone's told about it -->
+    <div class="section-card">
+      <div class="section-header">
+        <div class="section-title">Recent stage changes</div>
+      </div>
+      <div id="coordination-feed" style="padding:0">
+        <div class="empty-small">Loading…</div>
+      </div>
+    </div>
+
     <!-- Root causes + Upcoming deliveries -->
     <div class="two-col">
       <div class="section-card">
@@ -557,6 +593,8 @@
     renderMonthlyAnalytics(projects);
     loadTeam();
     loadTeamTasks();
+    loadBusinessValue(projects);
+    loadProjectActivitySignals(projects);
 
     document.getElementById('page-loading').style.display = 'none';
   }
@@ -858,6 +896,149 @@
   }
 
   // ── TEAM MANAGEMENT ───────────────────────────────────────────────────────────
+  // ── BUSINESS VALUE ────────────────────────────────────────────────────────
+  // Ties production activity back to actual business size — the rest of
+  // this dashboard shows how many things are happening; this shows how
+  // much they're worth, using the same "value" figures already tracked in
+  // Capacity, keeping the same unlabeled-units privacy convention.
+  async function loadBusinessValue(projects) {
+    const el = document.getElementById('value-summary');
+    const trendEl = document.getElementById('value-trend');
+    try {
+      const finSnap = await getDocs(collection(db, 'projectFinance'));
+      const valueById = {};
+      finSnap.docs.forEach(d => { valueById[d.id] = Number(d.data().value) || 0; });
+
+      const ongoing = projects.filter(p => p.deliveryStatus === 'Ongoing');
+      const valueInProduction = ongoing.reduce((sum, p) => sum + (valueById[p.id] || 0), 0);
+
+      const withValue = projects.filter(p => valueById[p.id] > 0);
+      const avgOrderValue = withValue.length
+        ? Math.round(withValue.reduce((s, p) => s + valueById[p.id], 0) / withValue.length)
+        : 0;
+
+      function deliveredDateKey(p) {
+        if (p.deliveredDate) return String(p.deliveredDate).substring(0, 7);
+        if (p.updatedAt && p.updatedAt.seconds) return new Date(p.updatedAt.seconds * 1000).toISOString().substring(0, 7);
+        return null;
+      }
+
+      const thisMonthKey = new Date().toISOString().substring(0, 7);
+      let deliveredThisMonth = 0;
+      projects.forEach(p => {
+        if (!['Delivered', 'Completed'].includes(p.status)) return;
+        if (deliveredDateKey(p) === thisMonthKey) deliveredThisMonth += (valueById[p.id] || 0);
+      });
+
+      const fmt = n => Math.round(n).toLocaleString('en-IN');
+      el.innerHTML =
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">' +
+          '<div><div style="font-size:22px;font-weight:500">' + fmt(deliveredThisMonth) + '</div><div style="font-size:11.5px;color:var(--ink-3)">delivered this month</div></div>' +
+          '<div><div style="font-size:22px;font-weight:500">' + fmt(valueInProduction) + '</div><div style="font-size:11.5px;color:var(--ink-3)">currently in production</div></div>' +
+          '<div><div style="font-size:22px;font-weight:500">' + fmt(avgOrderValue) + '</div><div style="font-size:11.5px;color:var(--ink-3)">average order size</div></div>' +
+        '</div>';
+
+      const months = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i);
+        months.push({ key: d.toISOString().substring(0, 7), label: d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }), value: 0 });
+      }
+      projects.forEach(p => {
+        if (!['Delivered', 'Completed'].includes(p.status)) return;
+        const key = deliveredDateKey(p);
+        const m = months.find(m => m.key === key);
+        if (m) m.value += (valueById[p.id] || 0);
+      });
+      const maxVal = Math.max(1, ...months.map(m => m.value));
+      trendEl.innerHTML =
+        '<div style="font-size:11px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Value delivered, last 6 months</div>' +
+        '<div style="display:flex;align-items:flex-end;gap:8px;height:90px">' +
+          months.map(m =>
+            '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">' +
+              '<div style="font-size:10px;color:var(--ink-3);margin-bottom:2px">' + (m.value > 0 ? fmt(m.value) : '') + '</div>' +
+              '<div style="width:100%;background:var(--gold);border-radius:3px 3px 0 0;height:' + Math.max(3, m.value / maxVal * 56) + 'px"></div>' +
+              '<div style="font-size:10px;color:var(--ink-3);margin-top:4px">' + m.label + '</div>' +
+            '</div>'
+          ).join('') +
+        '</div>';
+    } catch (e) {
+      console.error('loadBusinessValue failed:', e);
+      el.innerHTML = '<div class="empty-small">Couldn\'t load value data.</div>';
+    }
+  }
+
+  // ── STAGNANT PROJECTS + COORDINATION FEED ────────────────────────────────
+  // Both come from the same source — each ongoing project's own activity
+  // log, which already records everything meaningful (stage changes,
+  // remarks, task additions) but was never read at the admin level before.
+  // Pulled once, shared by both views below instead of fetching twice.
+  async function loadProjectActivitySignals(projects) {
+    const ongoing = projects.filter(p => p.deliveryStatus === 'Ongoing');
+    const results = await Promise.all(ongoing.map(async p => {
+      try {
+        const snap = await getDocs(query(collection(db, 'projects', p.id, 'activity'), orderBy('at', 'desc'), limit(3)));
+        return { project: p, entries: snap.docs.map(d => d.data()) };
+      } catch (e) {
+        return { project: p, entries: [] };
+      }
+    }));
+    renderStagnantProjects(results);
+    renderCoordinationFeed(results);
+  }
+
+  function renderStagnantProjects(results) {
+    const el = document.getElementById('stagnant-list');
+    const countEl = document.getElementById('stagnant-count');
+    const QUIET_DAYS = 10;
+    const cutoff = Date.now() - QUIET_DAYS * 86400000;
+
+    const quiet = results.map(r => {
+      const latest = r.entries[0];
+      const lastActive = latest && latest.at && latest.at.seconds ? latest.at.seconds * 1000 : (r.project.createdAt && r.project.createdAt.seconds ? r.project.createdAt.seconds * 1000 : null);
+      return { project: r.project, lastActive };
+    }).filter(x => x.lastActive === null || x.lastActive < cutoff)
+      .sort((a, b) => (a.lastActive || 0) - (b.lastActive || 0));
+
+    if (!quiet.length) {
+      el.innerHTML = '<div class="empty-small">Nothing\'s gone quiet — every ongoing project has had recent activity.</div>';
+      countEl.textContent = '';
+      return;
+    }
+    countEl.textContent = quiet.length + (quiet.length === 1 ? ' project' : ' projects');
+    el.innerHTML = quiet.map(x => {
+      const daysAgo = x.lastActive ? Math.floor((Date.now() - x.lastActive) / 86400000) : null;
+      const label = daysAgo === null ? 'no activity recorded yet' : daysAgo + 'd since last activity';
+      return '<div onclick="window.location.href=\'project.html?id=' + x.project.id + '\'" style="padding:9px 20px;cursor:pointer;border-bottom:1px solid var(--surface-2);display:flex;justify-content:space-between;align-items:center">' +
+        '<div><span style="font-size:13px">' + esc(x.project.projectName || 'Unnamed') + '</span><span style="font-size:11px;color:var(--ink-3);margin-left:8px">' + esc(x.project.status || 'Not Started') + '</span></div>' +
+        '<span style="font-size:11.5px;color:#92400e;font-weight:500">' + label + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderCoordinationFeed(results) {
+    const el = document.getElementById('coordination-feed');
+    const events = [];
+    results.forEach(r => {
+      r.entries.forEach(e => {
+        if (e.message && /status/i.test(e.message)) {
+          events.push({ projectName: r.project.projectName, projectId: r.project.id, message: e.message, time: e.at && e.at.seconds ? e.at.seconds : 0 });
+        }
+      });
+    });
+    events.sort((a, b) => b.time - a.time);
+    const recent = events.slice(0, 8);
+    if (!recent.length) {
+      el.innerHTML = '<div class="empty-small">No stage changes recorded recently.</div>';
+      return;
+    }
+    el.innerHTML = recent.map(e =>
+      '<div onclick="window.location.href=\'project.html?id=' + e.projectId + '\'" style="padding:9px 20px;cursor:pointer;border-bottom:1px solid var(--surface-2)">' +
+        '<div style="font-size:13px;font-weight:500">' + esc(e.projectName || 'Unnamed') + '</div>' +
+        '<div style="font-size:12px;color:var(--ink-3);margin-top:1px">' + esc(e.message) + '</div>' +
+      '</div>'
+    ).join('');
+  }
+
   // ── TEAM TASKS (admin overview across everyone) ──────────────────────────
   // Same "tasks" collection each person's own dashboard reads from — this
   // just drops the per-user filter so an admin sees everyone's at once,
