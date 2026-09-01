@@ -1046,13 +1046,13 @@ function loadStock() {
 window.renderStock = function() {
   const grid = document.getElementById('stock-grid');
   if (!grid) return;
-  const q = (document.getElementById('stock-search')?.value || '').toLowerCase();
-  const statusFilter = document.getElementById('stock-status-filter')?.value || '';
+  const searchEl = document.getElementById('stock-search'); const q = (searchEl && searchEl.value || '').toLowerCase();
+  const statusFilterEl = document.getElementById('stock-status-filter'); const statusFilter = (statusFilterEl && statusFilterEl.value) || '';
   const filtered = allStock.filter(function(s) {
     if (statusFilter && s.status !== statusFilter) return false;
     if (q && !(s.name || '').toLowerCase().includes(q) && !(s.category || '').toLowerCase().includes(q)) return false;
     return true;
-  }).sort(function(a, b) { return (b.addedAt?.seconds || 0) - (a.addedAt?.seconds || 0); });
+  }).sort(function(a, b) { return ((b.addedAt && b.addedAt.seconds) || 0) - ((a.addedAt && a.addedAt.seconds) || 0); });
 
   if (!filtered.length) {
     grid.innerHTML = '<div class="empty-state">' + (allStock.length ? 'Nothing matches that search.' : 'No stock items added yet — tap "+ Add stock item" to log the first one.') + '</div>';
@@ -1207,8 +1207,8 @@ window.bulkUpdateStatus = async function() {
   const newStatus = document.getElementById('bulk-status-sel').value;
   if (!projectId || !newStatus) { showToast('Select a project and status'); return; }
   const proj = (window._projects||[]).find(p=>p.id===projectId);
-  const projName = proj?.projectName || projectId;
-  const oldStatus = proj?.status || 'Not Started';
+  const projName = (proj && proj.projectName) || projectId;
+  const oldStatus = (proj && proj.status) || 'Not Started';
 
   if (newStatus !== oldStatus) {
     if (newStatus === 'Delivered' || newStatus === 'Completed') {

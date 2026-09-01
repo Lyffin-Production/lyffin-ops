@@ -823,7 +823,7 @@
     }
     tbody.innerHTML = data.map(c => {
       const statusClass = 'badge-' + (c.status || 'pending').toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const projName = projects.find(p => p.id === c.projectId)?.projectName || c.projectId || '—';
+      const foundProj1 = projects.find(p => p.id === c.projectId); const projName = (foundProj1 && foundProj1.projectName) || c.projectId || '—';
       return `<tr onclick="openUpdateModal('${c.id}','complaint')">
         <td><strong>${esc(projName)}</strong></td>
         <td>${esc(c.productName || '—')}</td>
@@ -848,7 +848,7 @@
     tbody.innerHTML = data.map(q => {
       const sevClass = 'sev-' + (q.severity || 'low').toLowerCase().replace(/[^a-z0-9]+/g,'-');
       const statusClass = 'badge-' + (q.status || 'pending').toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const projName = projects.find(p => p.id === q.projectId)?.projectName || q.projectId || '—';
+      const foundProj2 = projects.find(p => p.id === q.projectId); const projName = (foundProj2 && foundProj2.projectName) || q.projectId || '—';
       const reopens = q.reopenCount || 0;
       return `<tr onclick="openUpdateModal('${q.id}','qc')">
         <td><strong>${esc(projName)}</strong></td>
@@ -881,14 +881,14 @@
   let qcStatusTab = 'ongoing';
 
   function applyComplaintFilters() {
-    const q = (document.querySelector('#tab-complaints .search-box input')?.value || '').toLowerCase();
-    const statusVal = document.querySelector('#tab-complaints .filter-select')?.value || '';
+    const qInput1 = document.querySelector('#tab-complaints .search-box input'); const q = ((qInput1 && qInput1.value) || '').toLowerCase();
+    const statusValEl = document.querySelector('#tab-complaints .filter-select'); const statusVal = (statusValEl && statusValEl.value) || '';
     const filtered = allComplaints.filter(c => {
       if (complaintStatusTab === 'ongoing' && c.status === 'Resolved') return false;
       if (complaintStatusTab === 'resolved' && c.status !== 'Resolved') return false;
       if (statusVal && c.status !== statusVal) return false;
       if (q) {
-        const projName = (projects.find(p => p.id === c.projectId)?.projectName || '').toLowerCase();
+        const foundProj3 = projects.find(p => p.id === c.projectId); const projName = ((foundProj3 && foundProj3.projectName) || '').toLowerCase();
         if (!(c.productName || '').toLowerCase().includes(q) && !projName.includes(q)) return false;
       }
       return true;
@@ -906,16 +906,16 @@
   window.filterComplaintsByStatus = function() { applyComplaintFilters(); };
 
   function applyQCFilters() {
-    const q = (document.querySelector('#tab-qc .search-box input')?.value || '').toLowerCase();
-    const stage = document.querySelectorAll('#tab-qc .filter-select')[0]?.value || '';
-    const cat = document.getElementById('filter-qc-category')?.value || '';
+    const qInput2 = document.querySelector('#tab-qc .search-box input'); const q = ((qInput2 && qInput2.value) || '').toLowerCase();
+    const stageEls = document.querySelectorAll('#tab-qc .filter-select'); const stage = (stageEls[0] && stageEls[0].value) || '';
+    const catEl = document.getElementById('filter-qc-category'); const cat = (catEl && catEl.value) || '';
     const filtered = allQC.filter(r => {
       if (qcStatusTab === 'ongoing' && r.status === 'Resolved') return false;
       if (qcStatusTab === 'resolved' && r.status !== 'Resolved') return false;
       if (stage && r.stage !== stage) return false;
       if (cat && r.category !== cat) return false;
       if (q) {
-        const projName = (projects.find(p => p.id === r.projectId)?.projectName || '').toLowerCase();
+        const foundProj4 = projects.find(p => p.id === r.projectId); const projName = ((foundProj4 && foundProj4.projectName) || '').toLowerCase();
         if (!(r.productName || '').toLowerCase().includes(q) && !projName.includes(q)) return false;
       }
       return true;
@@ -1002,7 +1002,7 @@
       : allQC.find(q => q.id === id);
     if (!record) return;
 
-    const projName = projects.find(p => p.id === record.projectId)?.projectName || '—';
+    const foundProj5 = projects.find(p => p.id === record.projectId); const projName = (foundProj5 && foundProj5.projectName) || '—';
     document.getElementById('update-modal-title').textContent = type === 'complaint' ? 'Update complaint' : 'Update QC defect';
     document.getElementById('update-detail').innerHTML = `
       <div class="detail-grid">

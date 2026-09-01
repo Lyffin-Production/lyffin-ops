@@ -648,7 +648,7 @@
       byAssignee[a] = (byAssignee[a] || 0) + 1;
     });
     const sorted = Object.entries(byAssignee).sort((a,b) => b[1]-a[1]);
-    const max = sorted[0]?.[1] || 1;
+    const max = (sorted[0] && sorted[0][1]) || 1;
 
     const el = document.getElementById('workload-list');
     if (!sorted.length) { el.innerHTML = '<div class="empty-small">No ongoing projects</div>'; return; }
@@ -669,7 +669,7 @@
       counts[rc] = (counts[rc] || 0) + 1;
     });
     const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, 6);
-    const max = sorted[0]?.[1] || 1;
+    const max = (sorted[0] && sorted[0][1]) || 1;
 
     const el = document.getElementById('cause-list');
     if (!sorted.length) { el.innerHTML = '<div class="empty-small">No complaints logged yet</div>'; return; }
@@ -720,19 +720,19 @@
     const events = [];
 
     projects.forEach(p => {
-      if (p.createdAt?.seconds) {
+      if (p.createdAt && p.createdAt.seconds) {
         events.push({ time: p.createdAt.seconds, dotClass: 'activity-dot-project', text: `New project <strong>${esc(p.projectName||'—')}</strong> created` });
       }
     });
 
     complaints.forEach(c => {
-      if (c.createdAt?.seconds) {
+      if (c.createdAt && c.createdAt.seconds) {
         events.push({ time: c.createdAt.seconds, dotClass: 'activity-dot-complaint', text: `Complaint logged for <strong>${esc(c.productName||'—')}</strong>` });
       }
     });
 
     qcReports.forEach(q => {
-      if (q.createdAt?.seconds) {
+      if (q.createdAt && q.createdAt.seconds) {
         events.push({ time: q.createdAt.seconds, dotClass: 'activity-dot-qc', text: `QC defect logged: <strong>${esc(q.productName||'—')}</strong> at ${esc(q.stage||'—')} stage` });
       }
     });
@@ -1286,7 +1286,7 @@
       byProduct[k] = (byProduct[k] || 0) + 1;
     });
     const sortedProducts = Object.entries(byProduct).sort((a,b) => b[1]-a[1]).slice(0,5);
-    const maxP = sortedProducts[0]?.[1] || 1;
+    const maxP = (sortedProducts[0] && sortedProducts[0][1]) || 1;
     const productEl = document.getElementById('product-complaints-list');
     if (!sortedProducts.length) { productEl.innerHTML = '<div class="empty-small">No complaints yet</div>'; }
     else {
@@ -1299,7 +1299,7 @@
     }
 
     // Resolution time stats
-    const resolved = complaints.filter(c => c.status === 'Resolved' && c.complaintDate && c.updatedAt?.seconds);
+    const resolved = complaints.filter(c => c.status === 'Resolved' && c.complaintDate && c.updatedAt && c.updatedAt.seconds);
     let avgDays = 0;
     if (resolved.length) {
       const total = resolved.reduce((sum, c) => {
@@ -1326,7 +1326,7 @@
     const byStage = {Structure:0, Polish:0, Upholstery:0, Packing:0};
     qcReports.forEach(q => { if (byStage[q.stage] !== undefined) byStage[q.stage]++; });
     const stageEntries = Object.entries(byStage).sort((a,b) => b[1]-a[1]);
-    const maxS = stageEntries[0]?.[1] || 1;
+    const maxS = (stageEntries[0] && stageEntries[0][1]) || 1;
     const stageEl = document.getElementById('qc-stage-list');
     const hasQC = stageEntries.some(([,v]) => v > 0);
     if (!hasQC) { stageEl.innerHTML = '<div class="empty-small">No QC defects logged</div>'; }
