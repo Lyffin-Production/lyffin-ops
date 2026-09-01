@@ -900,6 +900,10 @@
         </div>
       </div>
       <div id="my-tasks-list"></div>
+      <div style="padding:9px 20px;border-top:1px solid var(--surface-2)">
+        <button onclick="toggleMyCompletedTasks()" id="my-completed-toggle" style="font-size:12px;color:var(--ink-3);background:none;border:none;cursor:pointer;padding:0">View completed tasks</button>
+      </div>
+      <div id="my-completed-list" style="display:none;border-top:1px solid var(--surface-2)"></div>
     </div>
 
     <!-- Project progress tracker -->
@@ -1187,6 +1191,50 @@
       ));
     } catch (e) { /* non-critical — dot will just show again next load */ }
   }
+
+  // A personal history of what this person has actually finished, and
+  // when — collapsed by default so it doesn't compete with what's still
+  // open, but a tap away when someone wants to look back.
+  let myCompletedLoaded = false;
+  window.toggleMyCompletedTasks = async function() {
+    const list = document.getElementById('my-completed-list');
+    const toggle = document.getElementById('my-completed-toggle');
+    const opening = list.style.display === 'none';
+    list.style.display = opening ? 'block' : 'none';
+    toggle.textContent = opening ? 'Hide completed tasks' : 'View completed tasks';
+    if (opening && !myCompletedLoaded) {
+      myCompletedLoaded = true;
+      list.innerHTML = '<div class="empty-small" style="padding:12px 20px">Loading…</div>';
+      try {
+        const snap = await getDocs(query(
+          collection(db, 'tasks'),
+          where('ownerNames', 'array-contains', currentUserName),
+          where('status', '==', 'done')
+        ));
+        const tasks = snap.docs.map(d => Object.assign({ id: d.id }, d.data()))
+          .sort((a, b) => {
+            const ca = a.completedAt && a.completedAt.seconds ? a.completedAt.seconds : 0;
+            const cb = b.completedAt && b.completedAt.seconds ? b.completedAt.seconds : 0;
+            return cb - ca; // most recently completed first
+          });
+        if (!tasks.length) {
+          list.innerHTML = '<div class="empty-small" style="padding:12px 20px">Nothing completed yet.</div>';
+          return;
+        }
+        list.innerHTML = tasks.map(t => {
+          const completedLabel = (t.completedAt && t.completedAt.seconds)
+            ? new Date(t.completedAt.seconds * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+            : 'date not recorded';
+          return '<div style="padding:9px 20px;border-bottom:1px solid var(--surface-2)">' +
+            '<div style="font-size:13px;color:var(--ink-2)"><span style="color:#1c8a4e">✓</span> ' + esc(t.text || '') + '</div>' +
+            '<div style="font-size:11px;color:var(--ink-3);margin-top:2px">' + esc(t.projectName || 'General') + ' · completed ' + completedLabel + '</div>' +
+          '</div>';
+        }).join('');
+      } catch (e) {
+        list.innerHTML = '<div class="empty-small" style="padding:12px 20px">Couldn\'t load completed tasks.</div>';
+      }
+    }
+  };
 
   // A task doesn't have to belong to a project — it can be a general,
   // company-level thing, or something tied to an old project you don't

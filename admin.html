@@ -74,6 +74,9 @@
   /* SECTION CARD */
   .section-card { background: var(--white); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   .section-header { padding: 16px 20px; border-bottom: 1px solid var(--surface-2); display: flex; align-items: center; justify-content: space-between; }
+  .tabs { display: flex; gap: 2px; }
+  .tab { padding: 10px 14px; font-size: 12.5px; font-weight: 500; color: var(--ink-3); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; }
+  .tab.active { color: var(--ink); border-bottom-color: var(--gold); }
   .section-title { font-size: 14px; font-weight: 500; color: var(--ink); }
   .section-link { font-size: 12px; color: var(--gold); text-decoration: none; cursor: pointer; }
   .section-link:hover { text-decoration: underline; }
@@ -363,11 +366,15 @@
       </div>
     </div>
 
-    <!-- Every open task across every project, grouped by who it's assigned to -->
+    <!-- Every task across every project, grouped by who it's assigned to -->
     <div class="section-card">
       <div class="section-header">
         <div class="section-title">Team tasks</div>
         <span style="font-size:11px;color:var(--ink-3)" id="team-tasks-count"></span>
+      </div>
+      <div class="tabs" style="border-bottom:1px solid var(--border);padding:0 20px">
+        <div class="tab active" onclick="setTeamTasksTab('ongoing', this)">Ongoing</div>
+        <div class="tab" onclick="setTeamTasksTab('completed', this)">Completed</div>
       </div>
       <div class="section-body" id="team-tasks-section" style="padding:0">
         <div class="empty-small">Loading…</div>
@@ -856,10 +863,20 @@
   // just drops the per-user filter so an admin sees everyone's at once,
   // grouped by who it's assigned to, with the ability to close out or
   // remove one directly instead of chasing each person individually.
+  let teamTasksStatusTab = 'ongoing';
+
+  window.setTeamTasksTab = function(tab, el) {
+    teamTasksStatusTab = tab;
+    el.parentElement.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+    el.classList.add('active');
+    loadTeamTasks();
+  };
+
   async function loadTeamTasks() {
     const el = document.getElementById('team-tasks-section');
     try {
-      const snap = await getDocs(query(collection(db, 'tasks'), where('status', '==', 'open')));
+      const statusVal = teamTasksStatusTab === 'ongoing' ? 'open' : 'done';
+      const snap = await getDocs(query(collection(db, 'tasks'), where('status', '==', statusVal)));
       const tasks = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
       renderTeamTasks(tasks);
     } catch (e) {
@@ -871,19 +888,22 @@
   function renderTeamTasks(tasks) {
     const el = document.getElementById('team-tasks-section');
     const countEl = document.getElementById('team-tasks-count');
+    const isCompleted = teamTasksStatusTab === 'completed';
+
     if (!tasks.length) {
-      el.innerHTML = '<div class="empty-small">No open tasks right now.</div>';
+      el.innerHTML = '<div class="empty-small">' + (isCompleted ? 'Nothing completed yet.' : 'No open tasks right now.') + '</div>';
       countEl.textContent = '';
       return;
     }
     const today = new Date().toISOString().slice(0, 10);
-    const overdueCount = tasks.filter(t => t.dueDate && t.dueDate < today).length;
-    countEl.textContent = tasks.length + (tasks.length === 1 ? ' open task' : ' open tasks') +
+    const overdueCount = isCompleted ? 0 : tasks.filter(t => t.dueDate && t.dueDate < today).length;
+    countEl.textContent = tasks.length + (tasks.length === 1 ? (isCompleted ? ' completed task' : ' open task') : (isCompleted ? ' completed tasks' : ' open tasks')) +
       (overdueCount ? ' · ' + overdueCount + ' overdue' : '');
 
     // Group by EACH owner — a task with more than one assignee shows up
-    // under every one of their names, so nobody's workload looks lighter
-    // than it actually is just because someone else shares the task.
+    // under every one of their names, so nobody's workload (or history)
+    // looks lighter than it actually is just because someone else shares
+    // the task.
     const groups = {};
     tasks.forEach(t => {
       const owners = (t.ownerNames && t.ownerNames.length) ? t.ownerNames : (t.ownerName ? [t.ownerName] : ['Unassigned']);
@@ -897,15 +917,37 @@
 
     el.innerHTML = ownerNames.map(owner => {
       const list = groups[owner].slice().sort((a, b) => {
+        if (isCompleted) {
+          // Most recently completed first — this is a history, so newest belongs on top.
+          const ca = a.completedAt && a.completedAt.seconds ? a.completedAt.seconds : 0;
+          const cb = b.completedAt && b.completedAt.seconds ? b.completedAt.seconds : 0;
+          return cb - ca;
+        }
         const da = a.dueDate || '9999-99-99', db_ = b.dueDate || '9999-99-99';
         return da < db_ ? -1 : da > db_ ? 1 : 0;
       });
       const rows = list.map(t => {
+        const others = ((t.ownerNames && t.ownerNames.length) ? t.ownerNames : (t.ownerName ? [t.ownerName] : [])).filter(n => n !== owner);
+        if (isCompleted) {
+          const completedLabel = (t.completedAt && t.completedAt.seconds)
+            ? new Date(t.completedAt.seconds * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+            : 'date not recorded';
+          return '<div style="display:flex;align-items:center;gap:10px;padding:9px 20px;border-bottom:1px solid var(--surface-2)">' +
+            '<span style="flex-shrink:0;color:#1c8a4e" title="Completed">✓</span>' +
+            '<div style="flex:1;min-width:0">' +
+              '<div style="font-size:13px">' + esc(t.text || '') + '</div>' +
+              '<div style="font-size:11px;color:var(--ink-3);margin-top:2px">' + esc(t.projectName || 'General') + ' · completed ' + completedLabel +
+                (t.completedBy ? ' by ' + esc(t.completedBy) : '') +
+                (others.length ? ' · with ' + others.map(esc).join(', ') : '') +
+              '</div>' +
+            '</div>' +
+            '<button onclick="deleteTeamTask(\'' + t.id + '\', this)" title="Delete" style="flex-shrink:0;background:none;border:none;color:var(--ink-3);cursor:pointer;font-size:13px;padding:2px 6px">✕</button>' +
+          '</div>';
+        }
         const overdue = t.dueDate && t.dueDate < today;
         const dueLabel = t.dueDate
           ? new Date(t.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
           : 'no due date';
-        const others = ((t.ownerNames && t.ownerNames.length) ? t.ownerNames : (t.ownerName ? [t.ownerName] : [])).filter(n => n !== owner);
         return '<div style="display:flex;align-items:center;gap:10px;padding:9px 20px;border-bottom:1px solid var(--surface-2)">' +
           '<label style="flex-shrink:0;cursor:pointer"><input type="checkbox" onchange="markTeamTaskDone(\'' + t.id + '\', this)" style="width:15px;height:15px;cursor:pointer"></label>' +
           '<div style="flex:1;min-width:0">' +
