@@ -657,6 +657,32 @@
     </div>
     <div class="modal-body">
       <div class="detail-panel" id="update-detail"></div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>Assignee</label>
+          <select id="u-assignee">
+            <option value="">Select…</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Root cause</label>
+          <select id="u-rootcause">
+            <option value="">Select…</option>
+            <option>Factory listing mistake</option>
+            <option>Carpentry mistake</option>
+            <option>Polish mistake</option>
+            <option>Upholstery mistake</option>
+            <option>QC failure</option>
+            <option>Packaging not proper</option>
+            <option>Finish not standardized</option>
+            <option>Site not ready at delivery</option>
+            <option>Damage during transit</option>
+            <option>Client changed mind</option>
+            <option>Measurement error</option>
+            <option>Other</option>
+          </select>
+        </div>
+      </div>
       <div class="form-field">
         <label>Update status to</label>
         <select id="u-status">
@@ -736,9 +762,11 @@
   async function loadAssignees() {
     const snap = await getDocs(collection(db, 'users'));
     const users = snap.docs.map(d => d.data()).filter(u => !u.pending);
+    const opts = '<option value="">Select…</option>' + users.map(u => '<option>' + (u.name||u.email) + '</option>').join('');
     const sel = document.getElementById('c-assignee');
-    if (sel) sel.innerHTML = '<option value="">Select…</option>' +
-      users.map(u => '<option>' + (u.name||u.email) + '</option>').join('');
+    if (sel) sel.innerHTML = opts;
+    const uSel = document.getElementById('u-assignee');
+    if (uSel) uSel.innerHTML = opts;
   }
 
   async function loadData() {
@@ -982,10 +1010,10 @@
         <div class="detail-item"><label>Product</label><span>${esc(record.productName||'—')}</span></div>
         <div class="detail-item"><label>Current status</label><span>${record.status||'Pending'}</span></div>
         <div class="detail-item" style="grid-column:1/-1"><label>Details</label><span>${esc(record.details||record.issue||'—')}</span></div>
-        ${record.rootCause ? `<div class="detail-item"><label>Root cause</label><span>${esc(record.rootCause)}</span></div>` : ''}
-        ${record.assignee ? `<div class="detail-item"><label>Assignee</label><span>${esc(record.assignee)}</span></div>` : ''}
-
       </div>`;
+
+    document.getElementById('u-assignee').value = record.assignee || '';
+    document.getElementById('u-rootcause').value = record.rootCause || '';
 
     const statusSel = document.getElementById('u-status');
     statusSel.innerHTML = type === 'complaint'
@@ -1018,10 +1046,14 @@
   window.updateStatus = async function() {
     const newStatus = document.getElementById('u-status').value;
     const notes = document.getElementById('u-notes').value.trim();
+    const newAssignee = document.getElementById('u-assignee').value;
+    const newRootCause = document.getElementById('u-rootcause').value;
     const collName = currentUpdateType === 'complaint' ? 'complaints' : 'qc_reports';
     try {
       const updatePayload = {
         status: newStatus,
+        assignee: newAssignee,
+        rootCause: newRootCause,
         ...(notes ? { lastNote: notes } : {}),
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid,
