@@ -997,7 +997,7 @@
       </button>
     </div>
     <div style="padding:18px 24px 0">
-      <input type="text" id="search-input" placeholder="Search projects, tasks, complaints…" oninput="runCompanySearch()"
+      <input type="text" id="company-search-input" placeholder="Search projects, tasks, complaints…" oninput="runCompanySearch()"
         style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:var(--font-sans);box-sizing:border-box">
     </div>
     <div id="search-results" style="padding:8px 0 20px;max-height:60vh;overflow-y:auto">
@@ -1652,10 +1652,10 @@
   // app's scale, and avoids needing a separate search index/service.
   window.openSearchModal = function() {
     document.getElementById('modal-search').classList.add('open');
-    document.getElementById('search-input').value = '';
+    document.getElementById('company-search-input').value = '';
     document.getElementById('search-results').innerHTML =
       '<div style="padding:20px 24px;font-size:13px;color:var(--ink-3)">Type at least 2 characters to search across projects, tasks, and complaints.</div>';
-    setTimeout(() => document.getElementById('search-input').focus(), 50);
+    setTimeout(() => document.getElementById('company-search-input').focus(), 50);
   };
   window.closeSearchModal = function() {
     document.getElementById('modal-search').classList.remove('open');
@@ -1668,7 +1668,7 @@
   };
 
   async function doCompanySearch() {
-    const q = document.getElementById('search-input').value.trim().toLowerCase();
+    const q = document.getElementById('company-search-input').value.trim().toLowerCase();
     const resultsEl = document.getElementById('search-results');
     if (q.length < 2) {
       resultsEl.innerHTML = '<div style="padding:20px 24px;font-size:13px;color:var(--ink-3)">Type at least 2 characters to search across projects, tasks, and complaints.</div>';
@@ -1700,7 +1700,7 @@
     }
 
     if (!matchedProjects.length && !matchedTasks.length && !matchedComplaints.length) {
-      resultsEl.innerHTML = '<div style="padding:20px 24px;font-size:13px;color:var(--ink-3)">Nothing found for "' + esc(document.getElementById('search-input').value) + '".</div>';
+      resultsEl.innerHTML = '<div style="padding:20px 24px;font-size:13px;color:var(--ink-3)">Nothing found for "' + esc(document.getElementById('company-search-input').value) + '".</div>';
       return;
     }
 

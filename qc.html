@@ -544,28 +544,8 @@
       </div>
       <div class="form-field">
         <label>Product type</label>
-        <select id="c-product-type">
+        <select id="c-product-type" onchange="handleProductTypeSelect(this)">
           <option value="">Select…</option>
-          <option>Chair</option>
-          <option>Arm Chair</option>
-          <option>Sofa</option>
-          <option>Lounger Sofa</option>
-          <option>Single Seater</option>
-          <option>Coffee Table</option>
-          <option>Side Table</option>
-          <option>Dining Table</option>
-          <option>Console Table</option>
-          <option>Chest of Drawers</option>
-          <option>Study Table</option>
-          <option>Bed</option>
-          <option>Night Stand</option>
-          <option>Pouffe</option>
-          <option>Media Console</option>
-          <option>Mirror</option>
-          <option>Stool</option>
-          <option>Shelfs</option>
-          <option>Partition</option>
-          <option>Other</option>
         </select>
       </div>
       <div class="form-field">
@@ -756,28 +736,8 @@
       </div>
       <div class="form-field" id="u-product-type-row">
         <label>Product type</label>
-        <select id="u-product-type">
+        <select id="u-product-type" onchange="handleProductTypeSelect(this)">
           <option value="">Select…</option>
-          <option>Chair</option>
-          <option>Arm Chair</option>
-          <option>Sofa</option>
-          <option>Lounger Sofa</option>
-          <option>Single Seater</option>
-          <option>Coffee Table</option>
-          <option>Side Table</option>
-          <option>Dining Table</option>
-          <option>Console Table</option>
-          <option>Chest of Drawers</option>
-          <option>Study Table</option>
-          <option>Bed</option>
-          <option>Night Stand</option>
-          <option>Pouffe</option>
-          <option>Media Console</option>
-          <option>Mirror</option>
-          <option>Stool</option>
-          <option>Shelfs</option>
-          <option>Partition</option>
-          <option>Other</option>
         </select>
       </div>
       <div class="form-field">
@@ -825,6 +785,12 @@
   let projects = [];
   let currentUpdateId = null;
   let currentUpdateType = null;
+  // Falls back to this exact list if config/productTypes doesn't exist yet
+  // in Firestore — so the dropdown still works immediately even before an
+  // admin has ever added anything, and this becomes the seed the first
+  // time someone does.
+  let productTypes = ['Chair','Arm Chair','Sofa','Lounger Sofa','Single Seater','Coffee Table','Side Table','Dining Table','Console Table','Chest of Drawers','Study Table','Bed','Night Stand','Pouffe','Media Console','Mirror','Stool','Shelfs','Partition'];
+  const ADD_TYPE_SENTINEL = '__add_new_type__';
 
   // ── AUTH ──────────────────────────────────────────────────────────────────
   onAuthStateChanged(auth, async (user) => {
@@ -853,6 +819,7 @@
       document.getElementById('btn-new-qc').style.display = 'none';
     }
     loadData();
+    loadProductTypes();
   });
 
   // ── LOAD DATA ─────────────────────────────────────────────────────────────
@@ -865,6 +832,58 @@
     const uSel = document.getElementById('u-assignee');
     if (uSel) uSel.innerHTML = opts;
   }
+
+  // Product types are admin-extensible — new furniture categories come up
+  // over time, so this reads a live list from Firestore instead of a
+  // fixed set baked into the page, with an admin-only way to add to it
+  // right from the dropdown.
+  async function loadProductTypes() {
+    try {
+      const snap = await getDoc(doc(db, 'config', 'productTypes'));
+      if (snap.exists() && Array.isArray(snap.data().types) && snap.data().types.length) {
+        productTypes = snap.data().types;
+      }
+    } catch (e) {
+      console.error('loadProductTypes failed, using the built-in list:', e);
+    }
+    populateProductTypeDropdowns();
+  }
+
+  function populateProductTypeDropdowns() {
+    const opts = '<option value="">Select…</option>' +
+      productTypes.map(t => '<option>' + esc(t) + '</option>').join('') +
+      '<option>Other</option>' +
+      (currentRole === 'admin' ? '<option value="' + ADD_TYPE_SENTINEL + '">+ Add new type…</option>' : '');
+    ['c-product-type', 'u-product-type'].forEach(id => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const current = sel.value; // preserve selection through a refresh
+      sel.innerHTML = opts;
+      if (current && current !== ADD_TYPE_SENTINEL) sel.value = current;
+    });
+  }
+
+  window.handleProductTypeSelect = async function(selectEl) {
+    if (selectEl.value !== ADD_TYPE_SENTINEL) return;
+    const name = prompt('New product type name:');
+    selectEl.value = ''; // reset to placeholder while the add is in flight
+    if (!name || !name.trim()) return;
+    const trimmed = name.trim();
+    if (productTypes.some(t => t.toLowerCase() === trimmed.toLowerCase())) {
+      alert('"' + trimmed + '" is already in the list.');
+      selectEl.value = trimmed;
+      return;
+    }
+    try {
+      productTypes = productTypes.concat([trimmed]);
+      await setDoc(doc(db, 'config', 'productTypes'), { types: productTypes, updatedAt: serverTimestamp() }, { merge: true });
+      populateProductTypeDropdowns();
+      selectEl.value = trimmed;
+      showToast('Added "' + trimmed + '" as a product type');
+    } catch (e) {
+      alert('Could not add that type: ' + e.message);
+    }
+  };
 
   async function loadData() {
     // Load projects for dropdowns

@@ -163,6 +163,10 @@ service cloud.firestore {
       allow read: if isStaff();
       allow write: if isAdmin();
     }
+    match /config/productTypes {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
     // ── Capacity Ledger (admin only) ────────────────────────────────────
     // Production output + buffer settings, and per-project pricing.
     match /config/{docId} {
