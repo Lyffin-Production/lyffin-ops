@@ -1830,7 +1830,16 @@
     const STAGE_LABELS = {carpentry:'Structure', polish:'Polish', upholstery:'Upholstery', packing:'Packing'};
     const STATUS_COLORS = {'Not Started':'#9ca3af','Structure':'#d97706','Polish':'#3b82f6','Upholstery':'#0ea5e9','Packing':'#10b981','Delivered':'#16a34a','Completed':'#6b7280'};
 
-    const ongoing = projects.filter(function(p) { return !['Delivered','Completed'].includes(p.status); });
+    const ongoing = projects.filter(function(p) { return !['Delivered','Completed'].includes(p.status); })
+      .sort(function(a, b) {
+        // Soonest delivery date first — that's the order that actually
+        // matters for "what needs attention". Projects with no date set
+        // yet go to the end rather than sorting as if they were most urgent.
+        if (!a.handoverDate && !b.handoverDate) return 0;
+        if (!a.handoverDate) return 1;
+        if (!b.handoverDate) return -1;
+        return new Date(a.handoverDate) - new Date(b.handoverDate);
+      });
     const el = document.getElementById('dashboard-gantt');
     if (!el) return;
     if (!ongoing.length) {
