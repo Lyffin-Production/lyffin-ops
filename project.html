@@ -673,11 +673,16 @@
   // nothing active actually needs (all items mark it N/A) is left out of
   // the pipeline entirely rather than shown as a false "done".
   function computeStagePipeline() {
+    // Same exact colors as the Dashboard's own pipeline (STAGE_COLORS
+    // there), so a stage looks the same shade wherever you see it. The
+    // previous version referenced CSS variables (--s-carpentry-ink etc.)
+    // that were never actually defined anywhere in this file — with no
+    // real value and no fallback, the bars rendered with no color at all.
     const stages = [
-      { key:'carpentryStatus',  label:'Structure',   ink:'var(--s-carpentry-ink)',   bg:'var(--s-carpentry)' },
-      { key:'polishStatus',     label:'Polish',      ink:'var(--s-polish-ink)',      bg:'var(--s-polish)' },
-      { key:'upholsteryStatus', label:'Upholstery',  ink:'var(--s-upholstery-ink)',  bg:'var(--s-upholstery)' },
-      { key:'packingStatus',    label:'Packing',     ink:'var(--s-packing-ink)',     bg:'var(--s-packing)' }
+      { key:'carpentryStatus',  label:'Structure',   ink:'#d97706' },
+      { key:'polishStatus',     label:'Polish',      ink:'#3b82f6' },
+      { key:'upholsteryStatus', label:'Upholstery',  ink:'#0ea5e9' },
+      { key:'packingStatus',    label:'Packing',     ink:'#10b981' }
     ];
     const active = activeItems();
     const results = stages.map(s => {
