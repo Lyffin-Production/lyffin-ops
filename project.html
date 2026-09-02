@@ -698,8 +698,20 @@
     const totalItems = activeItems().length;
     const readyItems = activeItems().filter(i => i.overallStatus === 'Ready').length;
     const openComplaints = complaints.filter(c => c.status !== 'Resolved').length;
-    const pct = totalItems ? Math.round(readyItems / totalItems * 100) : 0;
     const pipeline = computeStagePipeline();
+    // Same weighting as the Dashboard's project list (Structure/Polish/
+    // Upholstery at 30% each, Packing at 10%) — previously this used
+    // "items with every stage done" instead, which meant a project stuck
+    // on Packing alone showed 0% here even with everything else finished,
+    // while the Dashboard correctly showed it as nearly done.
+    const STAGE_WEIGHTS = { Structure: 30, Polish: 30, Upholstery: 30, Packing: 10 };
+    let weightedSum = 0, totalWeight = 0;
+    pipeline.forEach(seg => {
+      const w = STAGE_WEIGHTS[seg.label] || 0;
+      weightedSum += seg.pct * w;
+      totalWeight += w;
+    });
+    const pct = totalWeight > 0 ? Math.round(weightedSum / totalWeight * 100) : 0;
 
     const pipelineHtml = !totalItems ? '' : `
       <div class="section-card" style="padding:20px 22px;margin-bottom:16px">
