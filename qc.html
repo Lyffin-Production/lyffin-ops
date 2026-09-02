@@ -482,6 +482,7 @@
     <!-- Patterns tab: where defects cluster, not individual records -->
     <div id="tab-patterns" style="display:none">
       <div class="stats-row" id="pat-stats"></div>
+      <div style="font-size:12.5px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;margin:4px 0 10px">QC defects</div>
       <div class="pat-grid">
         <div class="pat-card"><h4>By stage</h4><div id="pat-stage"></div></div>
         <div class="pat-card"><h4>By defect category</h4><div id="pat-category"></div></div>
@@ -489,6 +490,20 @@
         <div class="pat-card"><h4>By severity</h4><div id="pat-severity"></div></div>
         <div class="pat-card"><h4>Last 6 months</h4><div id="pat-trend"></div></div>
         <div class="pat-card"><h4>Repeat defects (reopened after "Resolved")</h4><div id="pat-recur"></div></div>
+      </div>
+
+      <!-- Complaints are what clients actually experience on the ground —
+           a different signal from QC defects (which are caught internally
+           before delivery), so this gets its own breakdown rather than
+           being folded into the QC numbers above. -->
+      <div style="font-size:12.5px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;margin:22px 0 10px">Complaints</div>
+      <div class="stats-row" id="pat-c-stats"></div>
+      <div class="pat-grid">
+        <div class="pat-card"><h4>By root cause</h4><div id="pat-c-rootcause"></div></div>
+        <div class="pat-card"><h4>By assignee</h4><div id="pat-c-assignee"></div></div>
+        <div class="pat-card"><h4>By product</h4><div id="pat-c-product"></div></div>
+        <div class="pat-card"><h4>Last 6 months</h4><div id="pat-c-trend"></div></div>
+        <div class="pat-card" style="grid-column:1/-1"><h4>Repeat complaints (reopened after "Resolved")</h4><div id="pat-c-recur"></div></div>
       </div>
     </div>
   </div>
@@ -915,49 +930,18 @@
     }).join('');
   }
 
-  window.renderPatterns = function renderPatterns() {
-    const data = allQC;
-    if (!data.length) {
-      ['pat-stage','pat-category','pat-team','pat-severity','pat-trend','pat-recur'].forEach(id => {
-        document.getElementById(id).innerHTML = '<div class="pat-empty">No QC defects logged yet.</div>';
-      });
-      document.getElementById('pat-stats').innerHTML = '';
-      return;
-    }
-
-    const byStage = {}, byCategory = {}, byTeam = {}, bySeverity = {};
+  // Shared by both the QC and Complaints sections below — same shape of
+  // chart, different data feeding it.
+  function patTrendChart(elId, data, dateField) {
     const monthCounts = {};
-    let repeatCount = 0, resolvedCount = 0, highSevCount = 0;
-
-    data.forEach(q => {
-      byStage[q.stage || 'Unspecified'] = (byStage[q.stage || 'Unspecified'] || 0) + 1;
-      byCategory[q.category || 'Unspecified'] = (byCategory[q.category || 'Unspecified'] || 0) + 1;
-      byTeam[q.team || 'Unspecified'] = (byTeam[q.team || 'Unspecified'] || 0) + 1;
-      bySeverity[q.severity || 'Unspecified'] = (bySeverity[q.severity || 'Unspecified'] || 0) + 1;
-      if ((q.reopenCount || 0) > 0) repeatCount++;
-      if (q.status === 'Resolved') resolvedCount++;
-      if (q.severity === 'High') highSevCount++;
-      const d = q.createdAt && q.createdAt.seconds ? new Date(q.createdAt.seconds * 1000) : null;
+    data.forEach(item => {
+      const ts = item[dateField];
+      const d = ts && ts.seconds ? new Date(ts.seconds * 1000) : null;
       if (d) {
         const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
         monthCounts[key] = (monthCounts[key] || 0) + 1;
       }
     });
-
-    // Top-line stat cards for this tab
-    document.getElementById('pat-stats').innerHTML = `
-      <div class="stat-card"><div class="stat-label">Total logged</div><div class="stat-value">${data.length}</div><div class="stat-sub">all time</div></div>
-      <div class="stat-card"><div class="stat-label">Repeat defects</div><div class="stat-value">${repeatCount}</div><div class="stat-sub">reopened after Resolved</div></div>
-      <div class="stat-card"><div class="stat-label">High severity</div><div class="stat-value">${highSevCount}</div><div class="stat-sub">${Math.round((highSevCount / data.length) * 100)}% of total</div></div>
-      <div class="stat-card"><div class="stat-label">Resolution rate</div><div class="stat-value">${Math.round((resolvedCount / data.length) * 100)}%</div><div class="stat-sub">${resolvedCount} of ${data.length} resolved</div></div>`;
-
-    patBarGroup('pat-stage', byStage, data.length);
-    patBarGroup('pat-category', byCategory, data.length);
-    patBarGroup('pat-team', byTeam, data.length);
-    patBarGroup('pat-severity', bySeverity, data.length);
-
-    // Last 6 calendar months, oldest first, zero-filled so a quiet month
-    // reads as quiet rather than just missing.
     const now = new Date();
     const months = [];
     for (let i = 5; i >= 0; i--) {
@@ -966,7 +950,7 @@
       months.push({ key, label: MN3[d.getMonth()] + ' ' + d.getFullYear(), count: monthCounts[key] || 0 });
     }
     const trendMax = Math.max(1, ...months.map(m => m.count));
-    document.getElementById('pat-trend').innerHTML = months.map(m => {
+    document.getElementById(elId).innerHTML = months.map(m => {
       const pct = m.count ? Math.max(4, Math.round((m.count / trendMax) * 100)) : 0;
       return `<div class="pat-row">
         <div class="pat-row-label">${m.label}</div>
@@ -974,28 +958,106 @@
         <div class="pat-row-count">${m.count}</div>
       </div>`;
     }).join('');
+  }
 
-    // Defects that came back after being marked Resolved — the clearest
-    // recurring-problem signal already in the data (see saveQCDefect /
-    // updateStatus's reopenCount tracking above).
-    const recurring = data.filter(q => (q.reopenCount || 0) > 0)
+  // Same recurrence signal for both — something that came back after
+  // being marked Resolved is the clearest sign of a real, unfixed
+  // ground-level problem rather than a one-off.
+  function patRecurringList(elId, data, emptyMsg, detailFn) {
+    const recurring = data.filter(item => (item.reopenCount || 0) > 0)
       .sort((a, b) => (b.reopenCount || 0) - (a.reopenCount || 0))
       .slice(0, 8);
-    const recurEl = document.getElementById('pat-recur');
+    const el = document.getElementById(elId);
     if (!recurring.length) {
-      recurEl.innerHTML = '<div class="pat-empty">No defect has been reopened after being marked Resolved yet.</div>';
-    } else {
-      recurEl.innerHTML = recurring.map(q => {
-        const foundProj = projects.find(p => p.id === q.projectId);
-        const projName = (foundProj && foundProj.projectName) || q.projectId || '—';
-        return `<div class="pat-recur-item">
-          <b>${esc(q.productName || '—')}</b> — ${esc(projName)}
-          <span style="color:var(--ink-3)"> · ${esc(q.stage || '—')} / ${esc(q.category || '—')}</span>
-          <span style="color:#c0392b;font-weight:500;float:right">⚠ ${q.reopenCount}x</span>
-        </div>`;
-      }).join('');
+      el.innerHTML = '<div class="pat-empty">' + emptyMsg + '</div>';
+      return;
     }
+    el.innerHTML = recurring.map(item => {
+      const foundProj = projects.find(p => p.id === item.projectId);
+      const projName = (foundProj && foundProj.projectName) || item.projectId || '—';
+      return `<div class="pat-recur-item">
+        <b>${esc(item.productName || '—')}</b> — ${esc(projName)}
+        <span style="color:var(--ink-3)"> · ${detailFn(item)}</span>
+        <span style="color:#c0392b;font-weight:500;float:right">⚠ ${item.reopenCount}x</span>
+      </div>`;
+    }).join('');
+  }
+
+  window.renderPatterns = function renderPatterns() {
+    // ── QC defects ──────────────────────────────────────────────────────
+    const data = allQC;
+    if (!data.length) {
+      ['pat-stage','pat-category','pat-team','pat-severity','pat-trend','pat-recur'].forEach(id => {
+        document.getElementById(id).innerHTML = '<div class="pat-empty">No QC defects logged yet.</div>';
+      });
+      document.getElementById('pat-stats').innerHTML = '';
+    } else {
+      const byStage = {}, byCategory = {}, byTeam = {}, bySeverity = {};
+      let repeatCount = 0, resolvedCount = 0, highSevCount = 0;
+
+      data.forEach(q => {
+        byStage[q.stage || 'Unspecified'] = (byStage[q.stage || 'Unspecified'] || 0) + 1;
+        byCategory[q.category || 'Unspecified'] = (byCategory[q.category || 'Unspecified'] || 0) + 1;
+        byTeam[q.team || 'Unspecified'] = (byTeam[q.team || 'Unspecified'] || 0) + 1;
+        bySeverity[q.severity || 'Unspecified'] = (bySeverity[q.severity || 'Unspecified'] || 0) + 1;
+        if ((q.reopenCount || 0) > 0) repeatCount++;
+        if (q.status === 'Resolved') resolvedCount++;
+        if (q.severity === 'High') highSevCount++;
+      });
+
+      document.getElementById('pat-stats').innerHTML = `
+        <div class="stat-card"><div class="stat-label">Total logged</div><div class="stat-value">${data.length}</div><div class="stat-sub">all time</div></div>
+        <div class="stat-card"><div class="stat-label">Repeat defects</div><div class="stat-value">${repeatCount}</div><div class="stat-sub">reopened after Resolved</div></div>
+        <div class="stat-card"><div class="stat-label">High severity</div><div class="stat-value">${highSevCount}</div><div class="stat-sub">${Math.round((highSevCount / data.length) * 100)}% of total</div></div>
+        <div class="stat-card"><div class="stat-label">Resolution rate</div><div class="stat-value">${Math.round((resolvedCount / data.length) * 100)}%</div><div class="stat-sub">${resolvedCount} of ${data.length} resolved</div></div>`;
+
+      patBarGroup('pat-stage', byStage, data.length);
+      patBarGroup('pat-category', byCategory, data.length);
+      patBarGroup('pat-team', byTeam, data.length);
+      patBarGroup('pat-severity', bySeverity, data.length);
+      patTrendChart('pat-trend', data, 'createdAt');
+      patRecurringList('pat-recur', data, 'No defect has been reopened after being marked Resolved yet.',
+        q => esc(q.stage || '—') + ' / ' + esc(q.category || '—'));
+    }
+
+    // ── Complaints ──────────────────────────────────────────────────────
+    // A different signal from QC defects — this is what clients actually
+    // experienced after delivery, not what was caught internally
+    // beforehand. Same idea (root cause / who's handling it / trend /
+    // recurrence), applied to the fields complaints actually have.
+    const cData = allComplaints;
+    if (!cData.length) {
+      ['pat-c-rootcause','pat-c-assignee','pat-c-product','pat-c-trend','pat-c-recur'].forEach(id => {
+        document.getElementById(id).innerHTML = '<div class="pat-empty">No complaints logged yet.</div>';
+      });
+      document.getElementById('pat-c-stats').innerHTML = '';
+      return;
+    }
+
+    const byRootCause = {}, byAssignee = {}, byProduct = {};
+    let cRepeatCount = 0, cResolvedCount = 0;
+
+    cData.forEach(c => {
+      byRootCause[c.rootCause || 'Unspecified'] = (byRootCause[c.rootCause || 'Unspecified'] || 0) + 1;
+      byAssignee[c.assignee || 'Unassigned'] = (byAssignee[c.assignee || 'Unassigned'] || 0) + 1;
+      byProduct[c.productName || 'Unspecified'] = (byProduct[c.productName || 'Unspecified'] || 0) + 1;
+      if ((c.reopenCount || 0) > 0) cRepeatCount++;
+      if (c.status === 'Resolved') cResolvedCount++;
+    });
+
+    document.getElementById('pat-c-stats').innerHTML = `
+      <div class="stat-card"><div class="stat-label">Total logged</div><div class="stat-value">${cData.length}</div><div class="stat-sub">all time</div></div>
+      <div class="stat-card"><div class="stat-label">Repeat complaints</div><div class="stat-value">${cRepeatCount}</div><div class="stat-sub">reopened after Resolved</div></div>
+      <div class="stat-card"><div class="stat-label">Resolution rate</div><div class="stat-value">${Math.round((cResolvedCount / cData.length) * 100)}%</div><div class="stat-sub">${cResolvedCount} of ${cData.length} resolved</div></div>`;
+
+    patBarGroup('pat-c-rootcause', byRootCause, cData.length);
+    patBarGroup('pat-c-assignee', byAssignee, cData.length);
+    patBarGroup('pat-c-product', byProduct, cData.length);
+    patTrendChart('pat-c-trend', cData, 'createdAt');
+    patRecurringList('pat-c-recur', cData, 'No complaint has been reopened after being marked Resolved yet.',
+      c => esc(c.rootCause || '—'));
   };
+
 
   // ── TABS ──────────────────────────────────────────────────────────────────
   window.switchTab = function(tab, el) {
@@ -1197,9 +1259,13 @@
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid,
       };
-      // Track recurrences: if re-opening a resolved QC defect
-      if (currentUpdateType === 'qc' && newStatus !== 'Resolved') {
-        const prevRecord = allQC.find(q => q.id === currentUpdateId);
+      // Track recurrences: if re-opening something previously marked
+      // Resolved — applies to complaints just as much as QC defects, since
+      // a complaint coming back after being closed is exactly the kind of
+      // ground-level recurring-problem signal worth surfacing.
+      if (newStatus !== 'Resolved') {
+        const prevSource = currentUpdateType === 'qc' ? allQC : allComplaints;
+        const prevRecord = prevSource.find(r => r.id === currentUpdateId);
         if (prevRecord && prevRecord.status === 'Resolved') {
           updatePayload.reopenCount = (prevRecord.reopenCount || 0) + 1;
         }
