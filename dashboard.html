@@ -1035,6 +1035,14 @@
           <input type="date" id="f-handover">
         </div>
       </div>
+      <div class="form-field">
+        <label>Address</label>
+        <textarea id="f-address" rows="2" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:13.5px;font-family:var(--font-sans);outline:none;resize:vertical;box-sizing:border-box" placeholder="Full delivery address"></textarea>
+      </div>
+      <div class="form-field">
+        <label>Location coordinates <span style="font-size:11px;font-weight:400;color:var(--ink-3)">(Google Maps link or lat,lng)</span></label>
+        <input type="text" id="f-coords" placeholder="e.g. 11.2588,75.7804 or paste Maps link">
+      </div>
       <div class="form-row">
         <div class="form-field">
           <label>Assignee</label>
@@ -1731,6 +1739,8 @@
       orderDate:    document.getElementById('f-order-date').value,
       projectName:  document.getElementById('f-name').value.trim(),
       location:     document.getElementById('f-location').value.trim(),
+      address:      document.getElementById('f-address').value.trim(),
+      coordinates:  document.getElementById('f-coords').value.trim(),
       handoverDate: document.getElementById('f-handover').value,
       assignee:     document.getElementById('f-assignee').value,
       status:       document.getElementById('f-status').value,
@@ -1766,7 +1776,7 @@
       closeModal();
       showToast('Project created');
       // Reset form
-      ['f-order','f-order-date','f-name','f-location','f-handover','f-contact','f-notes']
+      ['f-order','f-order-date','f-name','f-location','f-address','f-coords','f-handover','f-contact','f-notes']
         .forEach(id => document.getElementById(id).value = '');
     } catch (e) {
       showToast('Error saving project');
