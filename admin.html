@@ -553,6 +553,7 @@
   initOfflineBanner();
 
   const PROD_STATUSES = ['Structure','Polish','Upholstery','Packing'];
+  let currentUserUID = '';
 
   // Date
   document.getElementById('topbar-date').textContent =
@@ -563,6 +564,7 @@
     if (!user) { window.location.href = 'login.html'; return; }
     const data = await resolveUserDoc(user, 'sales');
     if (data.role !== 'admin') { window.location.href = 'dashboard.html'; return; }
+    currentUserUID = user.uid;
     const name = data.name || user.email.split('@')[0];
     document.getElementById('user-name').textContent = name;
     document.getElementById('user-role').textContent = data.role;
@@ -1191,7 +1193,12 @@
           '<div style="font-size:13px;font-weight:500">' + esc(u.name||'—') + '</div>' +
           '<div style="font-size:11px;color:var(--ink-3)">' + esc(u.email||'') + '</div>' +
         '</div>' +
-        '<span style="font-size:11px;font-weight:500;padding:2px 8px;border-radius:10px;background:' + rc + '15;color:' + rc + ';text-transform:capitalize">' + esc(u.role||'—') + '</span>' +
+        '<select onchange="changeUserRole(\'' + u.id + '\', this.value, this)" style="font-size:11px;font-weight:500;padding:3px 6px;border-radius:10px;background:' + rc + '15;color:' + rc + ';text-transform:capitalize;border:1px solid ' + rc + '40;cursor:pointer">' +
+          ['sales','design','supervisor','floor','qc','admin'].map(function(r) {
+            const labels = {sales:'Sales', design:'Design', supervisor:'Factory Supervisor', floor:'Factory Floor', qc:'QC', admin:'Admin'};
+            return '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + labels[r] + '</option>';
+          }).join('') +
+        '</select>' +
       '</div>';
     }).join('') + invites.map(inv => {
       const rc = roleColors[inv.role] || '#9ca3af';
@@ -1206,6 +1213,34 @@
       '</div>';
     }).join('');
   }
+
+  window.changeUserRole = async function(uid, newRole, selectEl) {
+    const selectedOpt = selectEl.querySelector('option[selected]');
+    const oldRole = selectEl.dataset.prevRole || (selectedOpt && selectedOpt.value);
+    // Never let an admin accidentally lock themselves out — changing your
+    // own role away from admin here would kick you out of this whole page
+    // on the next load, with no one else necessarily able to undo it.
+    if (uid === currentUserUID && newRole !== 'admin') {
+      alert('You can\'t change your own role away from Admin here — ask another admin to do it, so you don\'t lock yourself out.');
+      selectEl.value = 'admin';
+      return;
+    }
+    if (!confirm('Change this person\'s role to "' + newRole + '"? This takes effect immediately.')) {
+      selectEl.value = selectEl.dataset.prevRole || oldRole;
+      return;
+    }
+    selectEl.disabled = true;
+    try {
+      await updateDoc(doc(db, 'users', uid), { role: newRole });
+      selectEl.dataset.prevRole = newRole;
+      loadTeam();
+    } catch (e) {
+      alert('Could not change role: ' + e.message);
+      selectEl.value = selectEl.dataset.prevRole || oldRole;
+    } finally {
+      selectEl.disabled = false;
+    }
+  };
 
   window.openAddUser = function() {
     document.getElementById('modal-adduser').style.display = 'flex';
