@@ -501,7 +501,6 @@
       <div class="pat-grid">
         <div class="pat-card"><h4>By root cause</h4><div id="pat-c-rootcause"></div></div>
         <div class="pat-card"><h4>By assignee</h4><div id="pat-c-assignee"></div></div>
-        <div class="pat-card"><h4>By product</h4><div id="pat-c-product"></div></div>
         <div class="pat-card"><h4>By product type</h4><div id="pat-c-product-type"></div></div>
         <div class="pat-card"><h4>Last 6 months</h4><div id="pat-c-trend"></div></div>
         <div class="pat-card" style="grid-column:1/-1"><h4>Repeat complaints (reopened after "Resolved")</h4><div id="pat-c-recur"></div></div>
@@ -1099,20 +1098,19 @@
     // recurrence), applied to the fields complaints actually have.
     const cData = allComplaints;
     if (!cData.length) {
-      ['pat-c-rootcause','pat-c-assignee','pat-c-product','pat-c-product-type','pat-c-trend','pat-c-recur'].forEach(id => {
+      ['pat-c-rootcause','pat-c-assignee','pat-c-product-type','pat-c-trend','pat-c-recur'].forEach(id => {
         document.getElementById(id).innerHTML = '<div class="pat-empty">No complaints logged yet.</div>';
       });
       document.getElementById('pat-c-stats').innerHTML = '';
       return;
     }
 
-    const byRootCause = {}, byAssignee = {}, byProduct = {}, byProductType = {};
+    const byRootCause = {}, byAssignee = {}, byProductType = {};
     let cRepeatCount = 0, cResolvedCount = 0;
 
     cData.forEach(c => {
       byRootCause[c.rootCause || 'Unspecified'] = (byRootCause[c.rootCause || 'Unspecified'] || 0) + 1;
       byAssignee[c.assignee || 'Unassigned'] = (byAssignee[c.assignee || 'Unassigned'] || 0) + 1;
-      byProduct[c.productName || 'Unspecified'] = (byProduct[c.productName || 'Unspecified'] || 0) + 1;
       byProductType[c.productType || 'Not set'] = (byProductType[c.productType || 'Not set'] || 0) + 1;
       if ((c.reopenCount || 0) > 0) cRepeatCount++;
       if (c.status === 'Resolved') cResolvedCount++;
@@ -1125,7 +1123,6 @@
 
     patBarGroup('pat-c-rootcause', byRootCause, cData.length);
     patBarGroup('pat-c-assignee', byAssignee, cData.length);
-    patBarGroup('pat-c-product', byProduct, cData.length);
     patBarGroup('pat-c-product-type', byProductType, cData.length);
     patTrendChart('pat-c-trend', cData, 'createdAt');
     patRecurringList('pat-c-recur', cData, 'No complaint has been reopened after being marked Resolved yet.',
