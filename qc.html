@@ -502,6 +502,7 @@
         <div class="pat-card"><h4>By root cause</h4><div id="pat-c-rootcause"></div></div>
         <div class="pat-card"><h4>By assignee</h4><div id="pat-c-assignee"></div></div>
         <div class="pat-card"><h4>By product</h4><div id="pat-c-product"></div></div>
+        <div class="pat-card"><h4>By product type</h4><div id="pat-c-product-type"></div></div>
         <div class="pat-card"><h4>Last 6 months</h4><div id="pat-c-trend"></div></div>
         <div class="pat-card" style="grid-column:1/-1"><h4>Repeat complaints (reopened after "Resolved")</h4><div id="pat-c-recur"></div></div>
       </div>
@@ -540,6 +541,32 @@
           <label>Delivery date</label>
           <input type="date" id="c-delivery-date">
         </div>
+      </div>
+      <div class="form-field">
+        <label>Product type</label>
+        <select id="c-product-type">
+          <option value="">Select…</option>
+          <option>Chair</option>
+          <option>Arm Chair</option>
+          <option>Sofa</option>
+          <option>Lounger Sofa</option>
+          <option>Single Seater</option>
+          <option>Coffee Table</option>
+          <option>Side Table</option>
+          <option>Dining Table</option>
+          <option>Console Table</option>
+          <option>Chest of Drawers</option>
+          <option>Study Table</option>
+          <option>Bed</option>
+          <option>Night Stand</option>
+          <option>Pouffe</option>
+          <option>Media Console</option>
+          <option>Mirror</option>
+          <option>Stool</option>
+          <option>Shelfs</option>
+          <option>Partition</option>
+          <option>Other</option>
+        </select>
       </div>
       <div class="form-field">
         <label>Complaint details</label>
@@ -726,6 +753,32 @@
             <option>Other</option>
           </select>
         </div>
+      </div>
+      <div class="form-field" id="u-product-type-row">
+        <label>Product type</label>
+        <select id="u-product-type">
+          <option value="">Select…</option>
+          <option>Chair</option>
+          <option>Arm Chair</option>
+          <option>Sofa</option>
+          <option>Lounger Sofa</option>
+          <option>Single Seater</option>
+          <option>Coffee Table</option>
+          <option>Side Table</option>
+          <option>Dining Table</option>
+          <option>Console Table</option>
+          <option>Chest of Drawers</option>
+          <option>Study Table</option>
+          <option>Bed</option>
+          <option>Night Stand</option>
+          <option>Pouffe</option>
+          <option>Media Console</option>
+          <option>Mirror</option>
+          <option>Stool</option>
+          <option>Shelfs</option>
+          <option>Partition</option>
+          <option>Other</option>
+        </select>
       </div>
       <div class="form-field">
         <label>Update status to</label>
@@ -1027,20 +1080,21 @@
     // recurrence), applied to the fields complaints actually have.
     const cData = allComplaints;
     if (!cData.length) {
-      ['pat-c-rootcause','pat-c-assignee','pat-c-product','pat-c-trend','pat-c-recur'].forEach(id => {
+      ['pat-c-rootcause','pat-c-assignee','pat-c-product','pat-c-product-type','pat-c-trend','pat-c-recur'].forEach(id => {
         document.getElementById(id).innerHTML = '<div class="pat-empty">No complaints logged yet.</div>';
       });
       document.getElementById('pat-c-stats').innerHTML = '';
       return;
     }
 
-    const byRootCause = {}, byAssignee = {}, byProduct = {};
+    const byRootCause = {}, byAssignee = {}, byProduct = {}, byProductType = {};
     let cRepeatCount = 0, cResolvedCount = 0;
 
     cData.forEach(c => {
       byRootCause[c.rootCause || 'Unspecified'] = (byRootCause[c.rootCause || 'Unspecified'] || 0) + 1;
       byAssignee[c.assignee || 'Unassigned'] = (byAssignee[c.assignee || 'Unassigned'] || 0) + 1;
       byProduct[c.productName || 'Unspecified'] = (byProduct[c.productName || 'Unspecified'] || 0) + 1;
+      byProductType[c.productType || 'Not set'] = (byProductType[c.productType || 'Not set'] || 0) + 1;
       if ((c.reopenCount || 0) > 0) cRepeatCount++;
       if (c.status === 'Resolved') cResolvedCount++;
     });
@@ -1053,6 +1107,7 @@
     patBarGroup('pat-c-rootcause', byRootCause, cData.length);
     patBarGroup('pat-c-assignee', byAssignee, cData.length);
     patBarGroup('pat-c-product', byProduct, cData.length);
+    patBarGroup('pat-c-product-type', byProductType, cData.length);
     patTrendChart('pat-c-trend', cData, 'createdAt');
     patRecurringList('pat-c-recur', cData, 'No complaint has been reopened after being marked Resolved yet.',
       c => esc(c.rootCause || '—'));
@@ -1145,6 +1200,7 @@
       projectId:    document.getElementById('c-project').value,
       complaintDate:document.getElementById('c-date').value,
       productName:  document.getElementById('c-product').value.trim(),
+      productType:  document.getElementById('c-product-type').value,
       deliveryDate: document.getElementById('c-delivery-date').value,
       details:      document.getElementById('c-details').value.trim(),
       rootCause:    document.getElementById('c-rootcause').value,
@@ -1215,6 +1271,8 @@
 
     document.getElementById('u-assignee').value = record.assignee || '';
     document.getElementById('u-rootcause').value = record.rootCause || '';
+    document.getElementById('u-product-type-row').style.display = type === 'complaint' ? 'block' : 'none';
+    document.getElementById('u-product-type').value = record.productType || '';
 
     const statusSel = document.getElementById('u-status');
     statusSel.innerHTML = type === 'complaint'
@@ -1255,6 +1313,7 @@
         status: newStatus,
         assignee: newAssignee,
         rootCause: newRootCause,
+        ...(currentUpdateType === 'complaint' ? { productType: document.getElementById('u-product-type').value } : {}),
         ...(notes ? { lastNote: notes } : {}),
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid,
