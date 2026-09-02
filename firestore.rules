@@ -150,8 +150,21 @@ service cloud.firestore {
       allow write: if isStaff();
     }
 
+    // ── Sales-facing capacity residue ────────────────────────────────────
+    // Published by capacity.html (admin only) after every real allocation
+    // run: day-by-day FREE capacity and FREE WIP slots only — no project
+    // names, clients, or values. Lets quote.html answer "does a new order
+    // fit" for any staff member without exposing the admin-only order book
+    // or projectFinance pricing below. Must be declared before the
+    // wildcard config/{docId} rule is reached for this exact path; Firestore
+    // rules are additive across matching blocks, so this simply widens read
+    // access for this one document while write stays admin-only.
+    match /config/capacitySnapshot {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
     // ── Capacity Ledger (admin only) ────────────────────────────────────
-    // Production output + buffer settings.
+    // Production output + buffer settings, and per-project pricing.
     match /config/{docId} {
       allow read, write: if isAdmin();
     }

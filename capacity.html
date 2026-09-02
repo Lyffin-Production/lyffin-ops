@@ -1019,7 +1019,7 @@
 
 <script type="module">
   import { onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
-  import { collection, getDocs, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
+  import { collection, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
   import { db, auth, esc, resolveUserDoc, initOfflineBanner } from './shared.js';
 
   initOfflineBanner();
@@ -1062,12 +1062,13 @@
     return s > 0 ? s : 0.0001;
   }
   // Bigger jobs simply need longer, whatever the factory's own day estimate
-  // says — this is the floor under that.
+  // says — this is the floor under that. Kept as a table (not just inline
+  // if/else) so the same breakpoints can be published to config/capacitySnapshot
+  // for quote.html to use, instead of hardcoding a second copy there.
+  const TIER_BREAKS = [ {max:15,days:50}, {max:30,days:65}, {max:50,days:80}, {max:Infinity,days:90} ];
   function tierMinDays(value){
-    if(value <= 15) return 50;
-    if(value <= 30) return 65;
-    if(value <= 50) return 80;
-    return 90;
+    for(const t of TIER_BREAKS) if(value <= t.max) return t.days;
+    return TIER_BREAKS[TIER_BREAKS.length-1].days;
   }
   // The number of days actually used to schedule a project: the factory's
   // own estimate when there is one, but never less than its value-tier
@@ -1086,7 +1087,7 @@
     const out = new Array(HORIZON);
     for(let i=0;i<HORIZON;i++){
       const d = addDays(base, i), work = isWorkDay(d);
-      out[i] = { date:d, isWork:work, cap: work?cap:0, committed:0 };
+      out[i] = { date:d, isWork:work, cap: work?cap:0, committed:0, wipUsed:0 };
     }
     return out;
   }
@@ -1149,6 +1150,10 @@
           if(eligible.length >= cfg.wip) break;
         }
       }
+      // How many WIP slots are occupied today — published (not the projects
+      // behind them) so quote.html can tell "no free slot" apart from
+      // "no free capacity" without seeing any project's identity or price.
+      day.wipUsed = eligible.length;
       if(!eligible.length) continue;
 
       const takenToday = new Map();
@@ -1381,6 +1386,31 @@
   const saveConfig = () => setDoc(doc(db,'config','capacity'),
     {monthlyOutput:cfg.capacity, bufferPct:cfg.buffer, workDays:cfg.workDays, wip:cfg.wip,
      leadDays:cfg.leadDays, sundayOff:cfg.sundayOff}, {merge:true});
+
+  // ── sales-facing capacity snapshot ────────────────────────────────────
+  // Sales needs to know "can I promise this date" without ever seeing
+  // projectFinance (every other project's price) — that wall is deliberate
+  // (see firestore.rules). So instead of handing sales the real order book,
+  // this publishes only the day-by-day RESIDUE the real allocation leaves
+  // behind: free capacity and free WIP slots, no project identities or
+  // values attached. quote.html (sales' own page) re-runs the same
+  // single-job placement loop against this residue. Written once per admin
+  // page-load — real order book changes throughout the day, so this can
+  // drift; quote.html shows how old it is and admins re-open this page to
+  // refresh it.
+  async function publishSalesSnapshot(alloc){
+    try{
+      const days = alloc.days.map(d => ({
+        t: d.date.getFullYear()+'-'+pad(d.date.getMonth()+1)+'-'+pad(d.date.getDate()),
+        f: Math.round((d.cap - d.committed) * 100) / 100,
+        w: Math.max(0, cfg.wip - (d.wipUsed||0))
+      }));
+      await setDoc(doc(db,'config','capacitySnapshot'), {
+        days, leadDays: cfg.leadDays, tierBreaks: TIER_BREAKS,
+        generatedAt: serverTimestamp()
+      });
+    }catch(e){ console.error('publishSalesSnapshot failed —', e); }
+  }
 
   /* ── render ─────────────────────────────────────────────────────────── */
   const $ = id => document.getElementById(id);
@@ -1620,6 +1650,11 @@
     $('lc-quoteOrder').value = todayStr();
     await loadAll();
     try{ render(); }catch(e){ console.error('render() failed —', e); }
+    // Publish the residue Sales' quote.html runs against. Uses the REAL
+    // order book (no hypothetical quote row) — the allocate() call inside
+    // render()/renderQuote() may include a quote-in-progress, so this is
+    // computed fresh here rather than reusing that one.
+    try{ await publishSalesSnapshot(allocate()); }catch(e){ console.error('publishSalesSnapshot failed —', e); }
   });
   window.signOut = async function(){ await fbSignOut(auth); window.location.href='login.html'; };
 

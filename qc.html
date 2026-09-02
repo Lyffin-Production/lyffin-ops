@@ -82,6 +82,21 @@
   .stat-value { font-size: 26px; font-weight: 500; color: var(--ink); line-height: 1; }
   .stat-sub { font-size: 11px; color: var(--ink-3); margin-top: 3px; }
 
+  /* PATTERNS */
+  .pat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .pat-grid { grid-template-columns: 1fr; } }
+  .pat-card { background: var(--white); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; }
+  .pat-card h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--gold); font-weight: 600; margin-bottom: 12px; }
+  .pat-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 12.5px; }
+  .pat-row-label { width: 100px; flex-shrink: 0; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pat-row-bar { flex: 1; height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+  .pat-row-fill { height: 100%; background: var(--gold); border-radius: 4px; }
+  .pat-row-count { width: 26px; text-align: right; color: var(--ink-3); font-size: 11.5px; flex-shrink: 0; }
+  .pat-empty { color: var(--ink-3); font-size: 13px; padding: 8px 0; }
+  .pat-recur-item { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+  .pat-recur-item:last-child { border-bottom: none; }
+  .pat-recur-item b { font-family: var(--font-disp); font-weight: 500; }
+
   /* TABLE */
   .table-wrap { background: var(--white); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
@@ -365,9 +380,10 @@
     </div>
 
     <!-- Tabs -->
-    <div class="tabs">
+    <div class="tabs" id="qc-main-tabs">
       <div class="tab active" onclick="switchTab('complaints', this)">Complaints</div>
       <div class="tab" onclick="switchTab('qc', this)">QC Defects</div>
+      <div class="tab" onclick="switchTab('patterns', this)">Patterns</div>
     </div>
 
     <!-- Complaints tab -->
@@ -460,6 +476,19 @@
             <tr><td colspan="7"><div class="empty-state">Loading QC defects…</div></td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- Patterns tab: where defects cluster, not individual records -->
+    <div id="tab-patterns" style="display:none">
+      <div class="stats-row" id="pat-stats"></div>
+      <div class="pat-grid">
+        <div class="pat-card"><h4>By stage</h4><div id="pat-stage"></div></div>
+        <div class="pat-card"><h4>By defect category</h4><div id="pat-category"></div></div>
+        <div class="pat-card"><h4>By responsible team</h4><div id="pat-team"></div></div>
+        <div class="pat-card"><h4>By severity</h4><div id="pat-severity"></div></div>
+        <div class="pat-card"><h4>Last 6 months</h4><div id="pat-trend"></div></div>
+        <div class="pat-card"><h4>Repeat defects (reopened after "Resolved")</h4><div id="pat-recur"></div></div>
       </div>
     </div>
   </div>
@@ -794,6 +823,7 @@
       allQC = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       updateStats();
       applyQCFilters();
+      if (document.getElementById('tab-patterns').style.display !== 'none') renderPatterns();
       document.getElementById('page-loading').style.display = 'none';
     });
   }
@@ -863,12 +893,121 @@
     }).join('');
   }
 
+  // ── PATTERNS ──────────────────────────────────────────────────────────────
+  // Turns the same qc_reports records the table above already loaded into
+  // where-it-clusters breakdowns — stage, category, responsible team,
+  // severity, a 6-month trend, and which defects keep coming back after
+  // being marked Resolved. No new reads: it's a different view of allQC.
+  const MN3 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  function patBarGroup(elId, counts, total) {
+    const el = document.getElementById(elId);
+    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    if (!entries.length) { el.innerHTML = '<div class="pat-empty">No data yet.</div>'; return; }
+    const max = entries[0][1];
+    el.innerHTML = entries.map(([label, count]) => {
+      const pct = Math.max(4, Math.round((count / max) * 100));
+      return `<div class="pat-row">
+        <div class="pat-row-label" title="${esc(label)}">${esc(label)}</div>
+        <div class="pat-row-bar"><div class="pat-row-fill" style="width:${pct}%"></div></div>
+        <div class="pat-row-count">${count}</div>
+      </div>`;
+    }).join('');
+  }
+
+  window.renderPatterns = function renderPatterns() {
+    const data = allQC;
+    if (!data.length) {
+      ['pat-stage','pat-category','pat-team','pat-severity','pat-trend','pat-recur'].forEach(id => {
+        document.getElementById(id).innerHTML = '<div class="pat-empty">No QC defects logged yet.</div>';
+      });
+      document.getElementById('pat-stats').innerHTML = '';
+      return;
+    }
+
+    const byStage = {}, byCategory = {}, byTeam = {}, bySeverity = {};
+    const monthCounts = {};
+    let repeatCount = 0, resolvedCount = 0, highSevCount = 0;
+
+    data.forEach(q => {
+      byStage[q.stage || 'Unspecified'] = (byStage[q.stage || 'Unspecified'] || 0) + 1;
+      byCategory[q.category || 'Unspecified'] = (byCategory[q.category || 'Unspecified'] || 0) + 1;
+      byTeam[q.team || 'Unspecified'] = (byTeam[q.team || 'Unspecified'] || 0) + 1;
+      bySeverity[q.severity || 'Unspecified'] = (bySeverity[q.severity || 'Unspecified'] || 0) + 1;
+      if ((q.reopenCount || 0) > 0) repeatCount++;
+      if (q.status === 'Resolved') resolvedCount++;
+      if (q.severity === 'High') highSevCount++;
+      const d = q.createdAt && q.createdAt.seconds ? new Date(q.createdAt.seconds * 1000) : null;
+      if (d) {
+        const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        monthCounts[key] = (monthCounts[key] || 0) + 1;
+      }
+    });
+
+    // Top-line stat cards for this tab
+    document.getElementById('pat-stats').innerHTML = `
+      <div class="stat-card"><div class="stat-label">Total logged</div><div class="stat-value">${data.length}</div><div class="stat-sub">all time</div></div>
+      <div class="stat-card"><div class="stat-label">Repeat defects</div><div class="stat-value">${repeatCount}</div><div class="stat-sub">reopened after Resolved</div></div>
+      <div class="stat-card"><div class="stat-label">High severity</div><div class="stat-value">${highSevCount}</div><div class="stat-sub">${Math.round((highSevCount / data.length) * 100)}% of total</div></div>
+      <div class="stat-card"><div class="stat-label">Resolution rate</div><div class="stat-value">${Math.round((resolvedCount / data.length) * 100)}%</div><div class="stat-sub">${resolvedCount} of ${data.length} resolved</div></div>`;
+
+    patBarGroup('pat-stage', byStage, data.length);
+    patBarGroup('pat-category', byCategory, data.length);
+    patBarGroup('pat-team', byTeam, data.length);
+    patBarGroup('pat-severity', bySeverity, data.length);
+
+    // Last 6 calendar months, oldest first, zero-filled so a quiet month
+    // reads as quiet rather than just missing.
+    const now = new Date();
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      months.push({ key, label: MN3[d.getMonth()] + ' ' + d.getFullYear(), count: monthCounts[key] || 0 });
+    }
+    const trendMax = Math.max(1, ...months.map(m => m.count));
+    document.getElementById('pat-trend').innerHTML = months.map(m => {
+      const pct = m.count ? Math.max(4, Math.round((m.count / trendMax) * 100)) : 0;
+      return `<div class="pat-row">
+        <div class="pat-row-label">${m.label}</div>
+        <div class="pat-row-bar"><div class="pat-row-fill" style="width:${pct}%"></div></div>
+        <div class="pat-row-count">${m.count}</div>
+      </div>`;
+    }).join('');
+
+    // Defects that came back after being marked Resolved — the clearest
+    // recurring-problem signal already in the data (see saveQCDefect /
+    // updateStatus's reopenCount tracking above).
+    const recurring = data.filter(q => (q.reopenCount || 0) > 0)
+      .sort((a, b) => (b.reopenCount || 0) - (a.reopenCount || 0))
+      .slice(0, 8);
+    const recurEl = document.getElementById('pat-recur');
+    if (!recurring.length) {
+      recurEl.innerHTML = '<div class="pat-empty">No defect has been reopened after being marked Resolved yet.</div>';
+    } else {
+      recurEl.innerHTML = recurring.map(q => {
+        const foundProj = projects.find(p => p.id === q.projectId);
+        const projName = (foundProj && foundProj.projectName) || q.projectId || '—';
+        return `<div class="pat-recur-item">
+          <b>${esc(q.productName || '—')}</b> — ${esc(projName)}
+          <span style="color:var(--ink-3)"> · ${esc(q.stage || '—')} / ${esc(q.category || '—')}</span>
+          <span style="color:#c0392b;font-weight:500;float:right">⚠ ${q.reopenCount}x</span>
+        </div>`;
+      }).join('');
+    }
+  };
+
   // ── TABS ──────────────────────────────────────────────────────────────────
   window.switchTab = function(tab, el) {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    // Scoped to the top-level tab row only — the Ongoing/Resolved/All
+    // sub-tabs inside each panel manage their own 'active' class and must
+    // not be touched here.
+    document.querySelectorAll('#qc-main-tabs .tab').forEach(t => t.classList.remove('active'));
     el.classList.add('active');
     document.getElementById('tab-complaints').style.display = tab === 'complaints' ? 'block' : 'none';
     document.getElementById('tab-qc').style.display = tab === 'qc' ? 'block' : 'none';
+    document.getElementById('tab-patterns').style.display = tab === 'patterns' ? 'block' : 'none';
+    if (tab === 'patterns') renderPatterns();
   };
 
   // ── FILTERS ───────────────────────────────────────────────────────────────

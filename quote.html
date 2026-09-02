@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1a1a18">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lyffin Ops">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Lyffin Ops — Quote a Delivery</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink:       #1a1a18;
+    --ink-2:     #4a4a46;
+    --ink-3:     #9a9890;
+    --surface:   #f7f6f2;
+    --surface-2: #eeecea;
+    --border:    #dddbd5;
+    --gold:      #b89a6a;
+    --gold-lt:   rgba(184,154,106,0.12);
+    --white:     #ffffff;
+    --radius:    6px;
+    --sidebar-w: 220px;
+    --font-sans: 'Inter', system-ui, sans-serif;
+    --font-disp: 'Playfair Display', Georgia, serif;
+    --s-packing: #d1fae5;
+    --s-carpentry: #fef3cd;
+    --s-complaints: #fee2e2;
+  }
+
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Playfair+Display:wght@500;600&display=swap');
+
+  body { font-family: var(--font-sans); background: var(--surface); color: var(--ink); min-height: 100vh; display: flex; }
+
+  .sidebar { width: var(--sidebar-w); min-height: 100vh; background: var(--ink); display: flex; flex-direction: column; flex-shrink: 0; position: fixed; left: 0; top: 0; bottom: 0; }
+  .sidebar-logo { padding: 24px 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+  .sidebar-logo-name { font-family: var(--font-disp); font-size: 18px; font-weight: 600; color: var(--white); letter-spacing: 0.02em; }
+  .sidebar-logo-sub { font-size: 10px; color: var(--gold); letter-spacing: 0.1em; text-transform: uppercase; margin-top: 2px; }
+  .sidebar-nav { flex: 1; padding: 16px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .nav-section { font-size: 10px; font-weight: 500; color: rgba(255,255,255,0.25); letter-spacing: 0.1em; text-transform: uppercase; padding: 12px 10px 6px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 5px; font-size: 13.5px; color: rgba(255,255,255,0.55); cursor: pointer; text-decoration: none; transition: background 0.12s, color 0.12s; }
+  .nav-item:hover { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.85); }
+  .nav-item.active { background: rgba(184,154,106,0.18); color: var(--gold); }
+  .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.8; }
+  .sidebar-user { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.07); display: flex; align-items: center; gap: 10px; }
+  .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: rgba(184,154,106,0.25); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; color: var(--gold); flex-shrink: 0; }
+  .user-info { flex: 1; min-width: 0; }
+  .user-name { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .user-role { font-size: 11px; color: rgba(255,255,255,0.3); text-transform: capitalize; }
+  .btn-signout { background: none; border: none; cursor: pointer; color: rgba(255,255,255,0.25); padding: 4px; }
+  .btn-signout svg { width: 16px; height: 16px; }
+
+  .main { margin-left: var(--sidebar-w); flex: 1; min-height: 100vh; display: flex; flex-direction: column; }
+  .topbar { background: var(--white); border-bottom: 1px solid var(--border); padding: 0 32px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  .topbar-title { font-family: var(--font-disp); font-size: 18px; font-weight: 500; color: var(--ink); }
+  .content { padding: 32px; flex: 1; max-width: 640px; }
+
+  .lc-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+  .lc-card h3{font-family:var(--font-sans);font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);margin-bottom:12px;font-weight:600}
+  .lc-lab{display:block;font-size:12px;color:var(--ink-2);margin:10px 0 3px}
+  .lc-inp{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;font-family:var(--font-sans);background:var(--white);color:var(--ink)}
+  .lc-inp:focus{outline:2px solid var(--gold-lt);border-color:var(--gold)}
+  .lc-hint{font-size:11px;color:var(--ink-3);margin-top:5px;line-height:1.4}
+  .lc-pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;margin-top:3px;white-space:nowrap}
+  .lc-pill.ok{background:var(--s-packing);color:#14532d}
+  .lc-pill.tight{background:var(--s-carpentry);color:#8a6d0f}
+  .lc-pill.over{background:var(--s-complaints);color:#991b1b}
+  .lc-qr{margin-top:12px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);font-size:13.5px;line-height:1.55}
+  .lc-qr b{font-family:var(--font-disp)}
+  .lc-muted{color:var(--ink-3)}
+  .lc-stale{margin-bottom:16px;padding:10px 14px;border-radius:var(--radius);font-size:12px;background:#fef3cd;color:#8a6d0f;border:1px solid #f0dfa0}
+  .lc-empty{color:var(--ink-3);font-size:13px;line-height:1.6}
+
+  @media (max-width: 700px) {
+    .sidebar { display: none !important; }
+    .main { margin-left: 0 !important; }
+    .content { padding: 16px 12px 90px !important; max-width: none; }
+    .topbar { padding: 0 16px; height: 52px; }
+    .topbar-title { font-size: 16px; }
+  }
+  .bottom-nav { display: none; position: fixed; bottom: 0; left: 0; right: 0; background: var(--ink); height: 64px; z-index: 50; border-top: 1px solid rgba(255,255,255,0.08); padding-bottom: env(safe-area-inset-bottom); }
+  .bottom-nav-inner { display: flex; height: 100%; align-items: stretch; width: 100%; justify-content: space-around; }
+  .bn-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: rgba(255,255,255,0.35); font-size: 9px; font-weight: 500; font-family: var(--font-sans); letter-spacing: 0.03em; text-transform: uppercase; cursor: pointer; border: none; background: none; transition: color .15s; padding: 0; min-width: 0; }
+  .bn-item.active { color: var(--gold); }
+  .bn-item svg { width: 20px; height: 20px; }
+  @media (max-width: 700px) { .bottom-nav { display: flex; } }
+</style></head><body>
+
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-name">lyffin</div>
+    <div class="sidebar-logo-sub">Ops Platform</div>
+  </div>
+  <div class="sidebar-nav">
+    <div class="nav-section">Workspace</div>
+    <a class="nav-item" href="dashboard.html">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+      Projects
+    </a>
+    <a class="nav-item" href="production.html">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 12V6l6-4 6 4v6"/><path d="M6 16v-5h4v5"/><path d="M2 12h12"/></svg>
+      Production
+    </a>
+    <a class="nav-item" href="qc.html">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1l2 4h4l-3 3 1 4-4-2-4 2 1-4L2 5h4z"/></svg>
+      QC &amp; Complaints
+    </a>
+    <a class="nav-item active" href="quote.html">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 2h9l3 3v9a1 1 0 01-1 1H2a1 1 0 01-1-1V3a1 1 0 011-1z"/><path d="M5 7h6M5 10h6M5 13h3"/></svg>
+      Quote a Delivery
+    </a>
+    <div class="nav-section" id="nav-admin-section" style="display:none">Admin</div>
+    <a class="nav-item" href="capacity.html" id="nav-capacity" style="display:none">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 14h14"/><rect x="2" y="8" width="3" height="6"/><rect x="6.5" y="4" width="3" height="10"/><rect x="11" y="6" width="3" height="8"/></svg>
+      Capacity
+    </a>
+    <a class="nav-item" href="admin.html" id="nav-admin" style="display:none">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1a3 3 0 100 6 3 3 0 000-6z"/><path d="M2 15c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
+      Admin dashboard
+    </a>
+  </div>
+  <div class="sidebar-user">
+    <div class="user-avatar" id="user-avatar">?</div>
+    <div class="user-info">
+      <div class="user-name" id="user-name">Loading…</div>
+      <div class="user-role" id="user-role">—</div>
+    </div>
+    <button class="btn-signout" onclick="signOut()" title="Sign out">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M11 11l4-4-4-4"/><path d="M15 8H6"/><path d="M6 14H2a1 1 0 01-1-1V3a1 1 0 011-1h4"/></svg>
+    </button>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title">Quote a Delivery</div>
+  </div>
+  <div class="content">
+    <div class="lc-card">
+      <h3>Can we promise this date?</h3>
+      <div id="qt-form">
+        <label class="lc-lab">Order date</label>
+        <input id="qt-order" class="lc-inp" type="date">
+        <label class="lc-lab">Project value (units — same units the factory quotes in)</label>
+        <input id="qt-value" class="lc-inp" type="number" min="1" placeholder="e.g. 25">
+        <label class="lc-lab">Estimated production days (optional)</label>
+        <input id="qt-days" class="lc-inp" type="number" min="1" placeholder="leave blank to use the value-tier minimum">
+        <div class="lc-hint">Only fill this in if the factory gave you a specific number for this job — otherwise a size-based minimum is used, same as Admin's own planning.</div>
+        <label class="lc-lab">Client's requested handover (optional)</label>
+        <input id="qt-req" class="lc-inp" type="date">
+        <div id="qt-result" class="lc-qr lc-muted">Enter the project value above.</div>
+        <div class="lc-hint" style="margin-top:10px">This checks against the factory's current committed schedule — it does not see other clients' projects or prices, only how much room is left. Confirm anything borderline with an admin.</div>
+      </div>
+      <div id="qt-stale" class="lc-stale" style="display:none"></div>
+      <div id="qt-nodata" class="lc-empty" style="display:none">
+        No capacity data has been published yet. Ask an admin to open the Capacity page once — it publishes the schedule this tool checks against automatically.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="bottom-nav">
+  <div class="bottom-nav-inner">
+    <a class="bn-item" href="dashboard.html">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+      Projects
+    </a>
+    <a class="bn-item" href="production.html">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 12V6l6-4 6 4v6"/><path d="M6 16v-5h4v5"/><path d="M2 12h12"/></svg>
+      Factory
+    </a>
+    <a class="bn-item" href="qc.html">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1l2 4h4l-3 3 1 4-4-2-4 2 1-4L2 5h4z"/></svg>
+      QC
+    </a>
+    <a class="bn-item active" href="quote.html">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 2h9l3 3v9a1 1 0 01-1 1H2a1 1 0 01-1-1V3a1 1 0 011-1z"/><path d="M5 7h6M5 10h6M5 13h3"/></svg>
+      Quote
+    </a>
+    <a class="bn-item" href="account.html">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1a3 3 0 100 6 3 3 0 000-6z"/><path d="M2 15c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
+      Account
+    </a>
+  </div>
+</div>
+
+<script type="module">
+  import { onAuthStateChanged, signOut as fbSignOut } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js';
+  import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js';
+  import { db, auth, resolveUserDoc, initOfflineBanner } from './shared.js';
+
+  initOfflineBanner();
+
+  // ── This page never reads projects, projectFinance or config/capacity —
+  // only config/capacitySnapshot, the privacy-safe residue Admin's Capacity
+  // page publishes (see capacity.html: publishSalesSnapshot). That doc has
+  // no project names, clients or prices in it — only free-capacity and
+  // free-WIP-slot numbers per day, so this tool can answer "does a new
+  // order of this size fit" without exposing anyone else's order book.
+
+  const DAY_MS = 86400000;
+  const MN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const pad = n => (n<10?'0':'')+n;
+  function parseYMD(s){
+    if(!s) return null;
+    const p = String(s).slice(0,10).split('-');
+    if(p.length<3) return null;
+    const y=+p[0], m=+p[1], d=+p[2];
+    if(!y||!m||!d) return null;
+    const dt = new Date(y, m-1, d); dt.setHours(0,0,0,0);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+  function today(){ const d=new Date(); d.setHours(0,0,0,0); return d; }
+  function addDays(d,n){ const x=new Date(d.getTime()); x.setDate(x.getDate()+n); x.setHours(0,0,0,0); return x; }
+  function dayDiff(a,b){ return Math.round((b.getTime()-a.getTime())/DAY_MS); }
+  function fmtDate(d){ return d ? d.getDate()+' '+MN[d.getMonth()]+' '+d.getFullYear() : '—'; }
+  function todayStr(){ const t=today(); return t.getFullYear()+'-'+pad(t.getMonth()+1)+'-'+pad(t.getDate()); }
+
+  let snapshot = null; // { days:[{t,f,w}], leadDays, tierBreaks, generatedAt }
+
+  function tierMinDays(value){
+    const breaks = (snapshot && snapshot.tierBreaks) || [ {max:15,days:50}, {max:30,days:65}, {max:50,days:80}, {max:Infinity,days:90} ];
+    for(const t of breaks) if(value <= t.max) return t.days;
+    return breaks[breaks.length-1].days;
+  }
+  function effectiveMinDays(value, estDays){
+    const floor = tierMinDays(value > 0 ? value : 0);
+    return estDays > 0 ? Math.max(estDays, floor) : floor;
+  }
+
+  // Places ONE hypothetical job against the published residue — mirrors
+  // the per-day ceiling logic in capacity.html's allocate(), simplified
+  // because this is the only job being placed (the residue already nets
+  // out every other real project and its WIP slot).
+  function simulate(value, estDays, orderStr){
+    const minD = effectiveMinDays(value, estDays);
+    const maxPerDay = value / minD;
+    const startStr = orderStr && orderStr > todayStr() ? orderStr : todayStr();
+    let rem = value, first = null, last = null, sawStart = false;
+    for(const d of snapshot.days){
+      if(d.t < startStr) continue;
+      sawStart = true;
+      if(rem <= 1e-6) break;
+      if(d.f > 1e-6 && d.w > 0){
+        const take = Math.min(d.f, rem, maxPerDay);
+        if(take > 1e-9){
+          rem -= take;
+          if(first===null) first = d.t;
+          last = d.t;
+        }
+      }
+    }
+    return { first, last, overflow: rem > 1e-6, ranOut: !sawStart, minD };
+  }
+
+  function render(){
+    const value = +document.getElementById('qt-value').value || 0;
+    const el = document.getElementById('qt-result');
+    if(!value){ el.className='lc-qr lc-muted'; el.textContent='Enter the project value above.'; return; }
+    const estDays = +document.getElementById('qt-days').value || 0;
+    const orderStr = document.getElementById('qt-order').value || todayStr();
+    const reqStr = document.getElementById('qt-req').value || '';
+    const leadDays = (snapshot && snapshot.leadDays) || 0;
+
+    const r = simulate(value, estDays, orderStr);
+    el.className = 'lc-qr';
+    if(r.ranOut){
+      el.innerHTML = '<span class="lc-pill over">no data that far out</span><br>The published schedule doesn’t reach this order date yet.<br><span class="lc-muted">Ask an admin to reopen the Capacity page to refresh it.</span>';
+      return;
+    }
+    if(r.overflow || !r.last){
+      el.innerHTML = '<span class="lc-pill over">can’t place it</span><br>This order doesn’t fit inside the published schedule horizon.<br><span class="lc-muted">Check with an admin — the queue may need reshuffling.</span>';
+      return;
+    }
+    const finish = parseYMD(r.last);
+    if(!reqStr){
+      el.innerHTML = 'Ordered '+fmtDate(parseYMD(orderStr))+' → completes <b>'+fmtDate(finish)+'</b> (min '+r.minD+' days for this size).'+
+        '<br><span class="lc-muted">Promise handover on or after that date.</span>';
+      return;
+    }
+    const want = parseYMD(reqStr);
+    const target = addDays(want, -leadDays);
+    const vsTarget = dayDiff(finish, target);
+    if(vsTarget >= 0){
+      el.innerHTML = '<span class="lc-pill ok">fits the requested date</span><br>Completes <b>'+fmtDate(finish)+'</b> — '+vsTarget+' d clear of the safety margin.'+
+        '<br><span class="lc-muted">Safe to confirm.</span>';
+      return;
+    }
+    const vsWant = dayDiff(finish, want);
+    if(vsWant >= 0){
+      el.innerHTML = '<span class="lc-pill tight">tight</span><br>Completes <b>'+fmtDate(finish)+'</b> — only '+vsWant+' d before handover, no safety margin.'+
+        '<br><span class="lc-muted">Confirm with an admin before promising this date.</span>';
+      return;
+    }
+    el.innerHTML = '<span class="lc-pill over">can’t hit that date</span><br>Earliest completion is <b>'+fmtDate(finish)+'</b> — '+(-vsWant)+' d late against the requested handover.'+
+      '<br><span class="lc-muted">Offer that date instead, or ask an admin whether it can be prioritized.</span>';
+  }
+
+  ['qt-value','qt-days'].forEach(id => document.getElementById(id).addEventListener('input', render));
+  ['qt-order','qt-req'].forEach(id => document.getElementById(id).addEventListener('change', render));
+
+  function fmtAge(generatedAt){
+    if(!generatedAt || !generatedAt.seconds) return 'unknown time';
+    const ms = Date.now() - generatedAt.seconds*1000;
+    const hrs = ms/3600000;
+    if(hrs < 1) return 'less than an hour ago';
+    if(hrs < 48) return Math.round(hrs)+' hour'+(Math.round(hrs)===1?'':'s')+' ago';
+    return Math.round(hrs/24)+' days ago';
+  }
+
+  async function loadSnapshot(){
+    try{
+      const snap = await getDoc(doc(db,'config','capacitySnapshot'));
+      if(!snap.exists() || !Array.isArray(snap.data().days) || !snap.data().days.length){
+        document.getElementById('qt-form').style.display = 'none';
+        document.getElementById('qt-nodata').style.display = 'block';
+        return;
+      }
+      snapshot = snap.data();
+      const staleEl = document.getElementById('qt-stale');
+      const ageHrs = snapshot.generatedAt && snapshot.generatedAt.seconds ? (Date.now()-snapshot.generatedAt.seconds*1000)/3600000 : 999;
+      if(ageHrs > 48){
+        staleEl.style.display = 'block';
+        staleEl.textContent = 'Capacity data last synced '+fmtAge(snapshot.generatedAt)+' — may not reflect very recent orders. Ask an admin to reopen the Capacity page to refresh it.';
+      }
+      document.getElementById('qt-order').value = todayStr();
+      render();
+    }catch(e){
+      console.error('loadSnapshot failed —', e);
+      document.getElementById('qt-form').style.display = 'none';
+      document.getElementById('qt-nodata').style.display = 'block';
+      document.getElementById('qt-nodata').textContent = 'Couldn’t load capacity data right now. Try again shortly.';
+    }
+  }
+
+  onAuthStateChanged(auth, async (user) => {
+    if(!user){ window.location.href='login.html'; return; }
+    const data = await resolveUserDoc(user, 'sales');
+    const role = data.role || 'sales';
+    if(!['admin','sales'].includes(role)){ window.location.href='dashboard.html'; return; }
+    const name = data.name || user.email.split('@')[0];
+    document.getElementById('user-name').textContent = name;
+    document.getElementById('user-role').textContent = role;
+    document.getElementById('user-avatar').textContent = name.substring(0,2).toUpperCase();
+    if(role === 'admin'){
+      document.getElementById('nav-admin-section').style.display = 'block';
+      document.getElementById('nav-capacity').style.display = 'flex';
+      document.getElementById('nav-admin').style.display = 'flex';
+    }
+    await loadSnapshot();
+  });
+  window.signOut = async function(){ await fbSignOut(auth); window.location.href='login.html'; };
+</script>
+</body></html>

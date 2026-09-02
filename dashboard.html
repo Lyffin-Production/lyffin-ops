@@ -801,6 +801,11 @@
       QC & Complaints
     </a>
 
+    <a class="nav-item" href="quote.html" id="nav-quote" style="display:none">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 2h9l3 3v9a1 1 0 01-1 1H2a1 1 0 01-1-1V3a1 1 0 011-1z"/><path d="M5 7h6M5 10h6M5 13h3"/></svg>
+      Quote a Delivery
+    </a>
+
     <div class="nav-section" id="nav-admin-section" style="display:none">Admin</div>
 
     <a class="nav-item" href="capacity.html" id="nav-capacity" style="display:none">
@@ -1126,6 +1131,12 @@
       if (bnA) bnA.style.display = 'flex';
       const bnC = document.getElementById('bn-capacity');
       if (bnC) bnC.style.display = 'flex';
+    }
+    // "Quote a Delivery" (capacity check) is for admin + sales — the roles
+    // that actually promise handover dates to clients.
+    if (['admin','sales'].includes(currentRole)) {
+      const navQ = document.getElementById('nav-quote');
+      if (navQ) navQ.style.display = 'flex';
     }
 
     // Hide "New project" button for floor/qc roles
