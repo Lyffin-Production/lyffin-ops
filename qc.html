@@ -417,11 +417,12 @@
               <th>Assignee</th>
               <th>Status</th>
               <th>Pickup date</th>
+              <th>Return date</th>
               <th>Logged</th>
             </tr>
           </thead>
           <tbody id="complaints-tbody">
-            <tr><td colspan="8"><div class="empty-state">Loading complaints…</div></td></tr>
+            <tr><td colspan="9"><div class="empty-state">Loading complaints…</div></td></tr>
           </tbody>
         </table>
       </div>
@@ -594,6 +595,10 @@
           <input type="date" id="c-pickup-date">
         </div>
       </div>
+      <div class="form-field">
+        <label>Return date <span style="font-size:11px;font-weight:400;color:var(--ink-3)">(delivered back after repair/replacement)</span></label>
+        <input type="date" id="c-return-date">
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modal-complaint')">Cancel</button>
@@ -750,8 +755,12 @@
         </select>
       </div>
       <div class="form-field" id="u-pickup-date-row">
-        <label>Return / Pickup scheduled date</label>
+        <label>Pickup date</label>
         <input type="date" id="u-pickup-date">
+      </div>
+      <div class="form-field" id="u-return-date-row">
+        <label>Return date <span style="font-size:11px;font-weight:400;color:var(--ink-3)">(delivered back after repair/replacement)</span></label>
+        <input type="date" id="u-return-date">
       </div>
       <div class="form-field">
         <label>Notes</label>
@@ -937,7 +946,7 @@
   function renderComplaints(data) {
     const tbody = document.getElementById('complaints-tbody');
     if (!data.length) {
-      tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">' +
+      tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state">' +
         (complaintStatusTab === 'resolved' ? 'Nothing resolved yet.' : complaintStatusTab === 'ongoing' ? 'Nothing open right now.' : 'No complaints logged yet.') +
         '</div></td></tr>';
       return;
@@ -953,6 +962,7 @@
         <td>${esc(c.assignee || '—')}</td>
         <td><span class="badge ${statusClass}">${esc(c.status || 'Pending')}</span></td>
         <td style="font-size:12px;color:${c.pickupDate ? 'var(--ink)' : 'var(--ink-3)'};font-weight:${c.pickupDate ? '600' : '400'}">${formatDate(c.pickupDate)}</td>
+        <td style="font-size:12px;color:${c.returnDate ? 'var(--ink)' : 'var(--ink-3)'};font-weight:${c.returnDate ? '600' : '400'}">${formatDate(c.returnDate)}</td>
         <td style="font-size:12px;color:var(--ink-3)">${formatDate(c.complaintDate)}</td>
       </tr>`;
     }).join('');
@@ -1229,6 +1239,7 @@
       assignee:     document.getElementById('c-assignee').value,
       resolution:   document.getElementById('c-resolution').value,
       pickupDate:   document.getElementById('c-pickup-date').value,
+      returnDate:   document.getElementById('c-return-date').value,
       status:       'Pending',
       createdAt:    serverTimestamp(),
       createdBy:    currentUser.uid,
@@ -1297,6 +1308,8 @@
     document.getElementById('u-product-type').value = record.productType || '';
     document.getElementById('u-pickup-date-row').style.display = type === 'complaint' ? 'block' : 'none';
     document.getElementById('u-pickup-date').value = record.pickupDate || '';
+    document.getElementById('u-return-date-row').style.display = type === 'complaint' ? 'block' : 'none';
+    document.getElementById('u-return-date').value = record.returnDate || '';
 
     const statusSel = document.getElementById('u-status');
     statusSel.innerHTML = type === 'complaint'
@@ -1337,7 +1350,7 @@
         status: newStatus,
         assignee: newAssignee,
         rootCause: newRootCause,
-        ...(currentUpdateType === 'complaint' ? { productType: document.getElementById('u-product-type').value, pickupDate: document.getElementById('u-pickup-date').value } : {}),
+        ...(currentUpdateType === 'complaint' ? { productType: document.getElementById('u-product-type').value, pickupDate: document.getElementById('u-pickup-date').value, returnDate: document.getElementById('u-return-date').value } : {}),
         ...(notes ? { lastNote: notes } : {}),
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid,
