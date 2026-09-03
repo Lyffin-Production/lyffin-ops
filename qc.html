@@ -416,11 +416,12 @@
               <th>Root cause</th>
               <th>Assignee</th>
               <th>Status</th>
+              <th>Pickup date</th>
               <th>Logged</th>
             </tr>
           </thead>
           <tbody id="complaints-tbody">
-            <tr><td colspan="7"><div class="empty-state">Loading complaints…</div></td></tr>
+            <tr><td colspan="8"><div class="empty-state">Loading complaints…</div></td></tr>
           </tbody>
         </table>
       </div>
@@ -748,6 +749,10 @@
           <option value="Resolved">Resolved</option>
         </select>
       </div>
+      <div class="form-field" id="u-pickup-date-row">
+        <label>Return / Pickup scheduled date</label>
+        <input type="date" id="u-pickup-date">
+      </div>
       <div class="form-field">
         <label>Notes</label>
         <textarea id="u-notes" placeholder="Add any update notes…" style="min-height:60px"></textarea>
@@ -932,7 +937,7 @@
   function renderComplaints(data) {
     const tbody = document.getElementById('complaints-tbody');
     if (!data.length) {
-      tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">' +
+      tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">' +
         (complaintStatusTab === 'resolved' ? 'Nothing resolved yet.' : complaintStatusTab === 'ongoing' ? 'Nothing open right now.' : 'No complaints logged yet.') +
         '</div></td></tr>';
       return;
@@ -947,6 +952,7 @@
         <td style="font-size:12px;color:var(--ink-3)">${esc(c.rootCause || '—')}</td>
         <td>${esc(c.assignee || '—')}</td>
         <td><span class="badge ${statusClass}">${esc(c.status || 'Pending')}</span></td>
+        <td style="font-size:12px;color:${c.pickupDate ? 'var(--ink)' : 'var(--ink-3)'};font-weight:${c.pickupDate ? '600' : '400'}">${formatDate(c.pickupDate)}</td>
         <td style="font-size:12px;color:var(--ink-3)">${formatDate(c.complaintDate)}</td>
       </tr>`;
     }).join('');
@@ -1289,6 +1295,8 @@
     document.getElementById('u-rootcause').value = record.rootCause || '';
     document.getElementById('u-product-type-row').style.display = type === 'complaint' ? 'block' : 'none';
     document.getElementById('u-product-type').value = record.productType || '';
+    document.getElementById('u-pickup-date-row').style.display = type === 'complaint' ? 'block' : 'none';
+    document.getElementById('u-pickup-date').value = record.pickupDate || '';
 
     const statusSel = document.getElementById('u-status');
     statusSel.innerHTML = type === 'complaint'
@@ -1329,7 +1337,7 @@
         status: newStatus,
         assignee: newAssignee,
         rootCause: newRootCause,
-        ...(currentUpdateType === 'complaint' ? { productType: document.getElementById('u-product-type').value } : {}),
+        ...(currentUpdateType === 'complaint' ? { productType: document.getElementById('u-product-type').value, pickupDate: document.getElementById('u-pickup-date').value } : {}),
         ...(notes ? { lastNote: notes } : {}),
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid,
